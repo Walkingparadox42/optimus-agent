@@ -381,6 +381,9 @@ export const en: Translations = {
       colorModeDesc: 'Pick a fixed mode or let Hermes follow your system setting.',
       toolViewTitle: 'Tool Call Display',
       toolViewDesc: 'Product hides raw tool payloads; Technical shows full input/output.',
+      workspaceModeTitle: 'Workspace Mode',
+      workspaceModeDesc:
+        'Dock chat, file browser, and preview as a cockpit workspace. Remembers its own pane layout, separate from the default.',
       translucencyTitle: 'Window Translucency',
       translucencyDesc: 'See your desktop through the whole window. macOS and Windows only.',
       embedsTitle: 'Inline Embeds',
@@ -902,6 +905,24 @@ export const en: Translations = {
     importedBadge: 'imported map',
     resetToMine: 'Back to my map'
   },
+  botvault: {
+    aria: 'BotVault',
+    title: 'BotVault',
+    emptyTitle: 'Vault is empty',
+    emptyBody: 'No files in the vault yet.'
+  },
+  avatarPane: {
+    title: 'Avatar',
+    states: {
+      error: 'Error',
+      idle: 'Idle',
+      listening: 'Listening',
+      speaking: 'Speaking',
+      thinking: 'Thinking',
+      toolUse: 'Using tools',
+      waiting: 'Needs input'
+    }
+  },
   agents: {
     close: 'Close agents',
     title: 'Spawn tree',
@@ -945,6 +966,9 @@ export const en: Translations = {
     appearance: 'Appearance',
     settings: 'Settings',
     changeTheme: 'Change theme',
+    toggleAvatarPane: 'Toggle avatar pane',
+    toggleBotVaultPane: 'Toggle BotVault pane',
+    toggleWorkspaceMode: 'Toggle workspace mode',
     changeColorMode: 'Change color mode…',
     pets: {
       title: 'Pets',

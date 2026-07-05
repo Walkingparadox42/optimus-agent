@@ -302,6 +302,8 @@ export interface Translations {
       colorModeDesc: string
       toolViewTitle: string
       toolViewDesc: string
+      workspaceModeTitle: string
+      workspaceModeDesc: string
       translucencyTitle: string
       translucencyDesc: string
       embedsTitle: string
@@ -788,6 +790,24 @@ export interface Translations {
     importedBadge: string
     resetToMine: string
   }
+  botvault: {
+    aria: string
+    title: string
+    emptyTitle: string
+    emptyBody: string
+  }
+  avatarPane: {
+    title: string
+    states: {
+      error: string
+      idle: string
+      listening: string
+      speaking: string
+      thinking: string
+      toolUse: string
+      waiting: string
+    }
+  }
   agents: {
     close: string
     title: string
@@ -831,6 +851,9 @@ export interface Translations {
     appearance: string
     settings: string
     changeTheme: string
+    toggleAvatarPane: string
+    toggleBotVaultPane: string
+    toggleWorkspaceMode: string
     changeColorMode: string
     pets: {
       title: string

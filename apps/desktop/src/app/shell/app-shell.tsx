@@ -45,6 +45,10 @@ interface AppShellProps {
   statusbarItems?: readonly StatusbarItem[]
   terminalPaneOpen?: boolean
   titlebarTools?: readonly TitlebarTool[]
+  // [Optimus Cockpit] Cockpit workspace mode. Exposed as a `data-workspace-mode`
+  // attribute on the shell root for styling/observability; the layout effect
+  // itself is driven by per-scope pane state (see store/workspace-mode).
+  workspaceMode?: boolean
 }
 
 // Renderer-side fallback so layout snaps even when the main-process fullscreen event
@@ -72,7 +76,8 @@ export function AppShell({
   previewPaneOpen = false,
   statusbarItems,
   terminalPaneOpen = false,
-  titlebarTools
+  titlebarTools,
+  workspaceMode = false
 }: AppShellProps) {
   const sidebarOpen = useStore($sidebarOpen)
   const fileBrowserOpen = useStore($fileBrowserOpen)
@@ -161,6 +166,7 @@ export function AppShell({
   return (
     <SidebarProvider
       className="h-screen min-h-0 flex-col bg-background"
+      data-workspace-mode={workspaceMode ? '' : undefined}
       onOpenChange={setSidebarOpen}
       open={sidebarOpen}
       style={

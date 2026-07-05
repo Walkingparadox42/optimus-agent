@@ -1880,7 +1880,28 @@ async function resolveHealedBranch(updateRoot, branch) {
   return 'main'
 }
 
+// [Optimus Cockpit fork] Auto-update kill-switch. This is a pinned fork
+// (baseline v2026.7.1-248-g7203898ce). Letting the desktop client self-update
+// would git-pull upstream over our changes and unpin the baseline, so both the
+// privileged check (git ls-remote) and apply (git pull + rebuild + relaunch)
+// short-circuit to inert no-ops below. To re-enable, set this to false.
+const AUTO_UPDATE_DISABLED = true
+
 async function checkUpdates() {
+  if (AUTO_UPDATE_DISABLED) {
+    console.log('[hermes][optimus] desktop self-update check disabled (pinned fork); reporting no update')
+
+    return {
+      supported: false,
+      reason: 'optimus-fork-pinned',
+      updateAvailable: false,
+      behind: 0,
+      message: 'Auto-update disabled in Optimus Cockpit fork (pinned baseline).',
+      branch: readDesktopUpdateConfig().branch,
+      fetchedAt: Date.now()
+    }
+  }
+
   const updateRoot = resolveUpdateRoot()
   let { branch } = readDesktopUpdateConfig()
   const gitDir = path.join(updateRoot, '.git')
@@ -2198,6 +2219,12 @@ async function releaseBackendLock(updateRoot, tag) {
 // Detection (checkUpdates / commit changelog / "N behind") stays in the UI;
 // only this apply action changed.
 async function applyUpdates(opts = {}) {
+  if (AUTO_UPDATE_DISABLED) {
+    console.log('[hermes][optimus] desktop self-update apply disabled (pinned fork); no-op')
+
+    return { ok: false, error: 'disabled', message: 'Auto-update disabled in Optimus Cockpit fork (pinned baseline).' }
+  }
+
   if (updateInFlight) {
     throw new Error('An update is already in progress.')
   }

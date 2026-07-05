@@ -279,6 +279,8 @@ export const zhHant = defineLocale({
       colorModeDesc: '選擇固定模式，或讓 Hermes 跟隨系統設定。',
       toolViewTitle: '工具呼叫顯示',
       toolViewDesc: '產品模式會隱藏原始工具 payload；技術模式會顯示完整輸入/輸出。',
+      workspaceModeTitle: '工作區模式',
+      workspaceModeDesc: '將聊天、檔案瀏覽器與預覽停靠為駕駛艙工作區。會獨立於預設佈局記住自己的窗格排列。',
       translucencyTitle: '視窗透明',
       translucencyDesc: '讓整個視窗透出桌面。僅支援 macOS 與 Windows。',
       embedsTitle: '內嵌預覽',
@@ -892,6 +894,24 @@ export const zhHant = defineLocale({
     emptyTitle: '尚無學習內容',
     emptyDesc: '當 Hermes 為你的工作建立技能與記憶時，會顯示在這裡。'
   },
+  botvault: {
+    aria: 'BotVault',
+    title: 'BotVault',
+    emptyTitle: '保險庫是空的',
+    emptyBody: '保險庫中還沒有檔案。'
+  },
+  avatarPane: {
+    title: '虛擬形象',
+    states: {
+      error: '發生錯誤',
+      idle: '閒置',
+      listening: '聆聽中',
+      speaking: '說話中',
+      thinking: '思考中',
+      toolUse: '使用工具中',
+      waiting: '等待輸入'
+    }
+  },
   agents: {
     close: '關閉代理',
     title: '派生樹',
@@ -935,6 +955,9 @@ export const zhHant = defineLocale({
     appearance: '外觀',
     settings: '設定',
     changeTheme: '變更主題',
+    toggleAvatarPane: '切換虛擬形象面板',
+    toggleBotVaultPane: '切換 BotVault 面板',
+    toggleWorkspaceMode: '切換工作區模式',
     changeColorMode: '變更色彩模式…',
     pets: {
       title: '寵物',

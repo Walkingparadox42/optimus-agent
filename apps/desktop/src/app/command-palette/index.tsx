@@ -55,10 +55,12 @@ import {
   setCommandPaletteOpen
 } from '@/store/command-palette'
 import { $bindings } from '@/store/keybinds'
+import { toggleAvatarPaneOpen, toggleBotVaultPaneOpen } from '@/store/layout'
 import { openPetGenerate } from '@/store/pet-generate'
 import { requestStartWorkSession } from '@/store/projects'
 import { runGatewayRestart } from '@/store/system-actions'
 import { applyBackendUpdate } from '@/store/updates'
+import { toggleWorkspaceMode } from '@/store/workspace-mode'
 import { luminance } from '@/themes/color'
 import { type ThemeMode, useTheme } from '@/themes/context'
 import { isUserTheme, resolveTheme } from '@/themes/user-themes'
@@ -538,6 +540,27 @@ export function CommandPalette() {
             keywords: ['pet', 'generate', 'create', 'make', 'new pet', 'mascot', 'hatch', 'ai'],
             label: cc.generatePet.title,
             run: () => openPetGenerate()
+          },
+          {
+            icon: Layers3,
+            id: 'appearance-workspace-mode',
+            keywords: ['workspace', 'cockpit', 'layout', 'panes', 'dock', 'mode'],
+            label: cc.toggleWorkspaceMode,
+            run: () => toggleWorkspaceMode()
+          },
+          {
+            icon: Users,
+            id: 'appearance-avatar-pane',
+            keywords: ['avatar', 'presence', 'headshot', 'workspace', 'cockpit', 'pane'],
+            label: cc.toggleAvatarPane,
+            run: () => toggleAvatarPaneOpen()
+          },
+          {
+            icon: Package,
+            id: 'appearance-botvault-pane',
+            keywords: ['botvault', 'vault', 'obsidian', 'notes', 'workspace', 'cockpit', 'pane'],
+            label: cc.toggleBotVaultPane,
+            run: () => toggleBotVaultPaneOpen()
           }
         ]
       },

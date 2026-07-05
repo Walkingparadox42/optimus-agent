@@ -42,6 +42,13 @@ const IDLE: UpdateApplyState = {
   log: []
 }
 
+// [Optimus Cockpit fork] Auto-update kill-switch (pinned baseline
+// v2026.7.1-248-g7203898ce). Disables the background update poller and the
+// Update button's apply actions (both client + backend). The privileged client
+// git-pull is also blocked in electron/main.cjs (AUTO_UPDATE_DISABLED). Typed
+// `boolean` so callers stay reachable for lint/analysis. Set false to re-enable.
+const AUTO_UPDATE_DISABLED: boolean = true
+
 export const $desktopVersion = atom<DesktopVersionInfo | null>(null)
 export const $updateApply = atom<UpdateApplyState>(IDLE)
 export const $updateChecking = atom<boolean>(false)
@@ -323,6 +330,12 @@ export async function checkUpdates(): Promise<DesktopUpdateStatus | null> {
 }
 
 export async function applyUpdates(opts: DesktopUpdateApplyOptions = {}): Promise<DesktopUpdateApplyResult> {
+  if (AUTO_UPDATE_DISABLED) {
+    console.info('[optimus] client Update action disabled (pinned fork); no-op')
+
+    return { ok: false, error: 'disabled', message: 'Auto-update disabled in Optimus Cockpit fork.' }
+  }
+
   const bridge = window.hermesDesktop?.updates
 
   if (!bridge) {
@@ -486,6 +499,12 @@ function ingestBackendActionStatus(status: Awaited<ReturnType<typeof getActionSt
 }
 
 export async function applyBackendUpdate(): Promise<DesktopUpdateApplyResult> {
+  if (AUTO_UPDATE_DISABLED) {
+    console.info('[optimus] backend Update action disabled (pinned fork); no-op')
+
+    return { ok: false, error: 'disabled', message: 'Auto-update disabled in Optimus Cockpit fork.' }
+  }
+
   dismissNotification(UPDATE_TOAST_ID)
   $backendUpdateApply.set({
     ...IDLE,
@@ -605,6 +624,12 @@ let lastConnectionMode: string | undefined
 
 /** Wire up background polling + progress streaming. Idempotent. */
 export function startUpdatePoller(): void {
+  if (AUTO_UPDATE_DISABLED) {
+    console.info('[optimus] auto-update background poller disabled (pinned fork); no-op')
+
+    return
+  }
+
   if (pollerStarted || typeof window === 'undefined') {
     return
   }

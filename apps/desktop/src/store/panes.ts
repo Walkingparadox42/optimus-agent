@@ -12,7 +12,22 @@ export interface PaneRegisterDefaults {
   widthOverride?: number
 }
 
-const STORAGE_KEY = 'hermes.desktop.paneStates.v1'
+// [Optimus Cockpit] Pane open/width state is persisted per SHELL SCOPE so the
+// cockpit "workspace mode" remembers its own pane arrangement independently of
+// the stock layout. The stock bucket key is unchanged, so stock-mode behavior
+// (and its stored state) is byte-for-byte identical. Switching scope swaps which
+// bucket backs $paneStates; every consumer keeps reading the same atom.
+const STOCK_STORAGE_KEY = 'hermes.desktop.paneStates.v1'
+const WORKSPACE_STORAGE_KEY = 'hermes.desktop.paneStates.workspace.v1'
+
+export type PaneScope = 'stock' | 'workspace'
+
+const scopeKey = (scope: PaneScope): string =>
+  scope === 'workspace' ? WORKSPACE_STORAGE_KEY : STOCK_STORAGE_KEY
+
+// The bucket currently backing $paneStates. Starts on stock so module init and
+// the initial persist target match the pre-cockpit behavior exactly.
+let currentScope: PaneScope = 'stock'
 
 function isSnapshot(value: unknown): value is PaneStateSnapshot {
   if (!value || typeof value !== 'object') {
@@ -34,13 +49,13 @@ function isSnapshot(value: unknown): value is PaneStateSnapshot {
   return widthOk && heightOk
 }
 
-function load(): Record<string, PaneStateSnapshot> {
+function load(storageKey: string): Record<string, PaneStateSnapshot> {
   if (typeof window === 'undefined') {
     return {}
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(storageKey)
 
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
@@ -65,21 +80,45 @@ function load(): Record<string, PaneStateSnapshot> {
 }
 
 // Persists both open state and resize width; load() validates each snapshot.
-function persist(states: Record<string, PaneStateSnapshot>) {
+function persist(states: Record<string, PaneStateSnapshot>, storageKey: string) {
   if (typeof window === 'undefined') {
     return
   }
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(states))
+    window.localStorage.setItem(storageKey, JSON.stringify(states))
   } catch {
     // Storage failures are nonfatal.
   }
 }
 
-export const $paneStates = atom<Record<string, PaneStateSnapshot>>(load())
+export const $paneStates = atom<Record<string, PaneStateSnapshot>>(load(scopeKey(currentScope)))
 
-$paneStates.subscribe(persist)
+// Always persist to whichever bucket is currently active.
+$paneStates.subscribe(states => persist(states, scopeKey(currentScope)))
+
+// Swap which persisted bucket backs $paneStates. Saves the current bucket, then
+// loads the target one. Seed entries fill in only the pane ids the stored
+// bucket doesn't know yet — so the first entry gets the full default
+// arrangement, and a cockpit pane introduced by a later update appears with its
+// seeded state in an existing workspace without clobbering the user's saved
+// arrangement. A no-op when already on `scope`. Driven by the workspace-mode
+// store; panes.ts stays free of any workspace/layout imports to avoid a cycle.
+export function setPaneScope(scope: PaneScope, seed?: Record<string, PaneStateSnapshot>): void {
+  if (scope === currentScope) {
+    return
+  }
+
+  // Flush the outgoing bucket before switching so nothing is lost.
+  persist($paneStates.get(), scopeKey(currentScope))
+  currentScope = scope
+
+  const loaded = load(scopeKey(scope))
+
+  // The subscribe above writes the set value straight into the new bucket, so
+  // seeded defaults persist as soon as they're applied.
+  $paneStates.set(seed ? { ...seed, ...loaded } : loaded)
+}
 
 // Cached per-pane derived atoms keep useStore subscriptions referentially stable.
 function memoized<T>(

@@ -370,6 +370,8 @@ export const zh: Translations = {
       colorModeDesc: '选择固定模式，或让 Hermes 跟随系统设置。',
       toolViewTitle: '工具调用显示',
       toolViewDesc: '产品模式隐藏原始工具数据；技术模式显示完整输入/输出。',
+      workspaceModeTitle: '工作区模式',
+      workspaceModeDesc: '将聊天、文件浏览器和预览停靠为驾驶舱工作区。会独立于默认布局记住自己的窗格排列。',
       translucencyTitle: '窗口透明',
       translucencyDesc: '让整个窗口透出桌面。仅支持 macOS 和 Windows。',
       embedsTitle: '内嵌预览',
@@ -1084,6 +1086,24 @@ export const zh: Translations = {
     importedBadge: '导入的图谱',
     resetToMine: '返回我的图谱'
   },
+  botvault: {
+    aria: 'BotVault',
+    title: 'BotVault',
+    emptyTitle: '保险库为空',
+    emptyBody: '保险库中还没有文件。'
+  },
+  avatarPane: {
+    title: '虚拟形象',
+    states: {
+      error: '出错',
+      idle: '空闲',
+      listening: '聆听中',
+      speaking: '说话中',
+      thinking: '思考中',
+      toolUse: '使用工具中',
+      waiting: '等待输入'
+    }
+  },
   agents: {
     close: '关闭代理',
     title: '派生树',
@@ -1127,6 +1147,9 @@ export const zh: Translations = {
     appearance: '外观',
     settings: '设置',
     changeTheme: '更改主题',
+    toggleAvatarPane: '切换虚拟形象面板',
+    toggleBotVaultPane: '切换 BotVault 面板',
+    toggleWorkspaceMode: '切换工作区模式',
     changeColorMode: '更改颜色模式…',
     pets: {
       title: '宠物',

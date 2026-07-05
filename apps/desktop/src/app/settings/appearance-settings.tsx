@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Switch } from '@/components/ui/switch'
 import type { DesktopMarketplaceSearchItem } from '@/global'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
@@ -16,6 +17,7 @@ import { $embedAllowed, $embedMode, clearEmbedAllowed, type EmbedMode, setEmbedM
 import { $activeGatewayProfile, $profiles, normalizeProfileKey } from '@/store/profile'
 import { $toolViewMode, setToolViewMode } from '@/store/tool-view'
 import { $translucency, setTranslucency } from '@/store/translucency'
+import { $workspaceMode, setWorkspaceMode } from '@/store/workspace-mode'
 import { getBaseColors, useTheme } from '@/themes/context'
 import { installVscodeThemeFromMarketplace } from '@/themes/install'
 import type { DesktopTheme } from '@/themes/types'
@@ -234,6 +236,7 @@ export function AppearanceSettings() {
   const embedMode = useStore($embedMode)
   const embedAllowed = useStore($embedAllowed)
   const translucency = useStore($translucency)
+  const workspaceMode = useStore($workspaceMode)
   const installs = useStore($marketplaceInstalls)
   const profiles = useStore($profiles)
   const activeProfileKey = normalizeProfileKey(useStore($activeGatewayProfile))
@@ -431,6 +434,21 @@ export function AppearanceSettings() {
             }
             description={a.toolViewDesc}
             title={a.toolViewTitle}
+          />
+
+          <ListRow
+            action={
+              <Switch
+                aria-label={a.workspaceModeTitle}
+                checked={workspaceMode}
+                onCheckedChange={on => {
+                  triggerHaptic('selection')
+                  setWorkspaceMode(on)
+                }}
+              />
+            }
+            description={a.workspaceModeDesc}
+            title={a.workspaceModeTitle}
           />
 
           <ListRow

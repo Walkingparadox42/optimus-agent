@@ -254,7 +254,10 @@ describe('checkBackendUpdates', () => {
   })
 })
 
-describe('applyUpdates terminal state', () => {
+// [Optimus Cockpit fork] applyUpdates is stubbed to a no-op (auto-update
+// disabled, pinned baseline). Skipped rather than deleted to keep the upstream
+// behavior test intact for a future merge; re-enable if AUTO_UPDATE_DISABLED=false.
+describe.skip('applyUpdates terminal state', () => {
   const applyMock = vi.fn()
 
   beforeEach(() => {
@@ -367,7 +370,10 @@ describe('applyUpdates terminal state', () => {
   })
 })
 
-describe('applyBackendUpdate recovery', () => {
+// [Optimus Cockpit fork] applyBackendUpdate is stubbed to a no-op (auto-update
+// disabled, pinned baseline). Skipped to preserve the upstream test for a future
+// merge; re-enable if AUTO_UPDATE_DISABLED=false.
+describe.skip('applyBackendUpdate recovery', () => {
   beforeEach(() => {
     storage.clear()
     checkHermesUpdateSpy.mockReset()
@@ -459,7 +465,10 @@ describe('applyBackendUpdate recovery', () => {
   })
 })
 
-describe('startUpdatePoller', () => {
+// [Optimus Cockpit fork] startUpdatePoller is stubbed to a no-op (auto-update
+// disabled, pinned baseline). Skipped to preserve the upstream test for a future
+// merge; re-enable if AUTO_UPDATE_DISABLED=false.
+describe.skip('startUpdatePoller', () => {
   const checkMock = vi.fn()
   const onProgressMock = vi.fn()
   const listeners: Record<string, Function> = {}

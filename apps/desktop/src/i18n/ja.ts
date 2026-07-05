@@ -287,6 +287,9 @@ export const ja = defineLocale({
       colorModeDesc: '固定モードを選ぶか、Hermes をシステム設定に合わせます。',
       toolViewTitle: 'ツール呼び出しの表示',
       toolViewDesc: 'プロダクト表示は生のツールペイロードを隠し、テクニカル表示は入出力をすべて表示します。',
+      workspaceModeTitle: 'ワークスペースモード',
+      workspaceModeDesc:
+        'チャット、ファイルブラウザ、プレビューをコックピットのワークスペースとしてドッキングします。既定とは別に、独自のペイン配置を記憶します。',
       translucencyTitle: 'ウィンドウの透過',
       translucencyDesc: 'ウィンドウ全体を透過させてデスクトップを表示します。macOS と Windows のみ。',
       embedsTitle: 'インライン埋め込み',
@@ -920,6 +923,24 @@ export const ja = defineLocale({
     emptyTitle: 'まだ学習はありません',
     emptyDesc: 'Hermes がスキルやメモリを蓄積すると、ここに表示されます。'
   },
+  botvault: {
+    aria: 'BotVault',
+    title: 'BotVault',
+    emptyTitle: 'ボルトは空です',
+    emptyBody: 'ボルトにはまだファイルがありません。'
+  },
+  avatarPane: {
+    title: 'アバター',
+    states: {
+      error: 'エラー',
+      idle: '待機中',
+      listening: '聞き取り中',
+      speaking: '発話中',
+      thinking: '思考中',
+      toolUse: 'ツール使用中',
+      waiting: '入力待ち'
+    }
+  },
   agents: {
     close: 'エージェントを閉じる',
     title: 'スポーンツリー',
@@ -963,6 +984,9 @@ export const ja = defineLocale({
     appearance: '外観',
     settings: '設定',
     changeTheme: 'テーマを変更',
+    toggleAvatarPane: 'アバターペインを切り替え',
+    toggleBotVaultPane: 'BotVaultペインを切り替え',
+    toggleWorkspaceMode: 'ワークスペースモードを切り替え',
     changeColorMode: 'カラーモードを変更…',
     pets: {
       title: 'ペット',

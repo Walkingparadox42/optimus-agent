@@ -25,6 +25,8 @@ import {
   $fileBrowserOpen,
   $panesFlipped,
   $pinnedSessionIds,
+  AVATAR_PANE_ID,
+  BOTVAULT_PANE_ID,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
@@ -76,7 +78,10 @@ import { onSessionsChanged } from '../store/session-sync'
 import { clearSessionTodos, setSessionTodos, todosForHydration } from '../store/todos'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
 import { isSecondaryWindow } from '../store/windows'
+import { $workspaceMode } from '../store/workspace-mode'
 
+import { AvatarPane } from './avatar'
+import { BotVaultPane } from './botvault'
 import { ChatView } from './chat'
 import { requestComposerFocus, requestComposerInsert } from './chat/composer/focus'
 import { useComposerActions } from './chat/hooks/use-composer-actions'
@@ -202,6 +207,10 @@ export function DesktopController() {
   const previewPaneOpen = useStore($paneOpen(PREVIEW_PANE_ID))
   const panesFlipped = useStore($panesFlipped)
   const profileScope = useStore($profileScope)
+  // Reading the flag here (in the always-mounted controller) guarantees the
+  // workspace-mode store initializes at boot, so a persisted workspace scope is
+  // restored on relaunch, and exposes the mode as a data attribute on the shell.
+  const workspaceMode = useStore($workspaceMode)
   // Below SIDEBAR_COLLAPSE_BREAKPOINT_PX there's no room for a docked rail —
   // collapse both sidebars (without touching their stored open state) so the
   // hover-reveal overlay becomes the way in. Restores once it's wide again.
@@ -1250,6 +1259,51 @@ export function DesktopController() {
     </Pane>
   )
 
+  // [Optimus Cockpit] BotVault pane. Workspace-mode only (same additive
+  // guarantee as the avatar pane); mirrors the file browser's chrome and
+  // sizing but pins its tree to the CT115 vault mount instead of following
+  // the session cwd. Toggled via the command palette ("Toggle BotVault pane").
+  const botVaultPane = (
+    <Pane
+      defaultOpen={false}
+      disabled={!chatOpen || !workspaceMode}
+      forceCollapsed={narrowViewport}
+      hoverReveal
+      id={BOTVAULT_PANE_ID}
+      key="botvault"
+      maxWidth={FILE_BROWSER_MAX_WIDTH}
+      minWidth={FILE_BROWSER_MIN_WIDTH}
+      resizable
+      side={railSide}
+      width={FILE_BROWSER_DEFAULT_WIDTH}
+    >
+      <BotVaultPane
+        onActivateFile={path => composer.insertContextPathInlineRef(path)}
+        onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
+      />
+    </Pane>
+  )
+
+  // [Optimus Cockpit] Avatar/presence pane. Workspace-mode only: `disabled`
+  // outside it, so the stock layout never gains a column (Phase 1 additive
+  // guarantee). Seeded open by the workspace arrangement; toggled via the
+  // command palette ("Toggle avatar pane").
+  const avatarPane = (
+    <Pane
+      defaultOpen={false}
+      disabled={!workspaceMode}
+      id={AVATAR_PANE_ID}
+      key="avatar"
+      maxWidth="20rem"
+      minWidth="11rem"
+      resizable
+      side={railSide}
+      width="14rem"
+    >
+      <AvatarPane />
+    </Pane>
+  )
+
   const terminalPane = (
     <Pane
       bottomRow={terminalAsRow}
@@ -1293,6 +1347,7 @@ export function DesktopController() {
       statusbarItems={statusbarItems}
       terminalPaneOpen={terminalSidebarOpen}
       titlebarTools={titlebarToolGroups.flat.right}
+      workspaceMode={workspaceMode}
     >
       {!isSecondaryWindow() && (
         <Pane
@@ -1349,14 +1404,19 @@ export function DesktopController() {
       </PaneMain>
       {/*
         Order within a side maps to column order. Default (rail on the right):
-        main | terminal | preview | file-browser. Flipped (rail on the left):
-        mirror to file-browser | preview | terminal | main so terminal stays
-        adjacent to the chat.
+        main | terminal | preview | file-browser | botvault | avatar. Flipped
+        (rail on the left): mirror to avatar | botvault | file-browser |
+        preview | terminal | main so terminal stays adjacent to the chat, the
+        vault sits next to the file browser, and the avatar stays outermost.
       */}
+      {panesFlipped ? avatarPane : null}
+      {panesFlipped ? botVaultPane : null}
       {panesFlipped ? fileBrowserPane : terminalPane}
       {previewPane}
       {reviewPane}
       {panesFlipped ? terminalPane : fileBrowserPane}
+      {panesFlipped ? null : botVaultPane}
+      {panesFlipped ? null : avatarPane}
     </AppShell>
   )
 }
