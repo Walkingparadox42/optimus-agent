@@ -16,6 +16,7 @@ import { Codecs, persistentAtom } from '@/lib/persisted'
 import {
   AVATAR_PANE_ID,
   BOTVAULT_PANE_ID,
+  BROWSER_PANE_ID,
   CHAT_SIDEBAR_PANE_ID,
   FILE_BROWSER_PANE_ID,
   PREVIEW_PANE_ID
@@ -34,6 +35,7 @@ const WORKSPACE_MODE_STORAGE_KEY = 'hermes.desktop.workspaceMode'
 const WORKSPACE_PANE_SEED: Record<string, PaneStateSnapshot> = {
   [AVATAR_PANE_ID]: { open: true },
   [BOTVAULT_PANE_ID]: { open: true },
+  [BROWSER_PANE_ID]: { open: true },
   [CHAT_SIDEBAR_PANE_ID]: { open: true },
   [FILE_BROWSER_PANE_ID]: { open: true },
   [PREVIEW_PANE_ID]: { open: true }

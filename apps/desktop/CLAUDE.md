@@ -32,6 +32,13 @@ building from scratch:
   client only.
 - Voice backend (:9125 WS service) is being built separately on CT115. It does
   not exist yet as of this session. Do not assume it's reachable.
+- LAN service hosts (LXCs on Urithiru) this project talks to directly:
+  - CT115 (192.168.0.116): Hermes backend; voice WS :9125 (planned).
+  - CT117 (192.168.0.117): MCPO.
+  - CT119 (192.168.0.119, "search-services", static reservation): SearXNG;
+    planned optimus-browser-bridge (Playwright verb API :9126, noVNC
+    websocket :9127; Phase 6, see OPTIMUS.md). Ports proposed, not yet bound.
+  Cross-host calls are plain LAN egress; nothing routes through the MiniPC.
 - The rest of this forked repo (agent/, gateway/, providers/, skills/, etc.)
   is vendor code we do not run. If asked to "start Hermes" or similar, that
   means the REMOTE CT115 instance, never a local install from this repo.

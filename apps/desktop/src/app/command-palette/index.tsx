@@ -55,7 +55,7 @@ import {
   setCommandPaletteOpen
 } from '@/store/command-palette'
 import { $bindings } from '@/store/keybinds'
-import { toggleAvatarPaneOpen, toggleBotVaultPaneOpen } from '@/store/layout'
+import { toggleAvatarPaneOpen, toggleBotVaultPaneOpen, toggleBrowserPaneOpen } from '@/store/layout'
 import { openPetGenerate } from '@/store/pet-generate'
 import { requestStartWorkSession } from '@/store/projects'
 import { runGatewayRestart } from '@/store/system-actions'
@@ -561,6 +561,13 @@ export function CommandPalette() {
             keywords: ['botvault', 'vault', 'obsidian', 'notes', 'workspace', 'cockpit', 'pane'],
             label: cc.toggleBotVaultPane,
             run: () => toggleBotVaultPaneOpen()
+          },
+          {
+            icon: Globe,
+            id: 'appearance-browser-pane',
+            keywords: ['browser', 'vnc', 'novnc', 'viewport', 'workspace', 'cockpit', 'pane'],
+            label: cc.toggleBrowserPane,
+            run: () => toggleBrowserPaneOpen()
           }
         ]
       },

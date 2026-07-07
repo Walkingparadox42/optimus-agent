@@ -27,6 +27,7 @@ import {
   $pinnedSessionIds,
   AVATAR_PANE_ID,
   BOTVAULT_PANE_ID,
+  BROWSER_PANE_ID,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
@@ -82,6 +83,7 @@ import { $workspaceMode } from '../store/workspace-mode'
 
 import { AvatarPane } from './avatar'
 import { BotVaultPane } from './botvault'
+import { BrowserPane } from './browser'
 import { ChatView } from './chat'
 import { requestComposerFocus, requestComposerInsert } from './chat/composer/focus'
 import { useComposerActions } from './chat/hooks/use-composer-actions'
@@ -1284,6 +1286,26 @@ export function DesktopController() {
     </Pane>
   )
 
+  // [Optimus Cockpit] Browser viewport pane (Phase 6 step 1, human plane
+  // only): a noVNC client into CT119's password-gated stack. Workspace-mode
+  // only. Children mount only in workspace mode so a hidden pane can never
+  // hold a live VNC socket in stock mode.
+  const browserPane = (
+    <Pane
+      defaultOpen={false}
+      disabled={!chatOpen || !workspaceMode}
+      id={BROWSER_PANE_ID}
+      key="browser"
+      maxWidth="72rem"
+      minWidth="20rem"
+      resizable
+      side={railSide}
+      width="36rem"
+    >
+      {workspaceMode ? <BrowserPane /> : null}
+    </Pane>
+  )
+
   // [Optimus Cockpit] Avatar/presence pane. Workspace-mode only: `disabled`
   // outside it, so the stock layout never gains a column (Phase 1 additive
   // guarantee). Seeded open by the workspace arrangement; toggled via the
@@ -1404,18 +1426,21 @@ export function DesktopController() {
       </PaneMain>
       {/*
         Order within a side maps to column order. Default (rail on the right):
-        main | terminal | preview | file-browser | botvault | avatar. Flipped
-        (rail on the left): mirror to avatar | botvault | file-browser |
-        preview | terminal | main so terminal stays adjacent to the chat, the
-        vault sits next to the file browser, and the avatar stays outermost.
+        main | terminal | preview | file-browser | botvault | browser |
+        avatar. Flipped (rail on the left): mirror to avatar | browser |
+        botvault | file-browser | preview | terminal | main so terminal stays
+        adjacent to the chat, the vault sits next to the file browser, and the
+        avatar stays outermost.
       */}
       {panesFlipped ? avatarPane : null}
+      {panesFlipped ? browserPane : null}
       {panesFlipped ? botVaultPane : null}
       {panesFlipped ? fileBrowserPane : terminalPane}
       {previewPane}
       {reviewPane}
       {panesFlipped ? terminalPane : fileBrowserPane}
       {panesFlipped ? null : botVaultPane}
+      {panesFlipped ? null : browserPane}
       {panesFlipped ? null : avatarPane}
     </AppShell>
   )

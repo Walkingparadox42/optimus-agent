@@ -911,6 +911,29 @@ export const en: Translations = {
     emptyTitle: 'Vault is empty',
     emptyBody: 'No files in the vault yet.'
   },
+  browserPane: {
+    aria: 'Remote browser',
+    title: 'Browser',
+    passwordPlaceholder: 'VNC password',
+    connect: 'Connect',
+    connecting: 'Connecting to the remote browser…',
+    disconnect: 'Disconnect',
+    authFailed: 'Authentication failed.',
+    lost: 'Connection closed.'
+  },
+  voicePanel: {
+    serverUrlPlaceholder: 'Voice server URL',
+    tokenPlaceholder: 'Voice token',
+    connect: 'Connect voice',
+    connecting: 'Connecting…',
+    disconnect: 'Disconnect voice',
+    holdToTalk: 'Hold to talk',
+    capturing: 'Listening…',
+    thinking: 'Thinking…',
+    speaking: 'Speaking — press to interrupt',
+    micDenied: 'Microphone access denied.',
+    connFailed: 'Voice connection failed.'
+  },
   avatarPane: {
     title: 'Avatar',
     states: {
@@ -968,6 +991,7 @@ export const en: Translations = {
     changeTheme: 'Change theme',
     toggleAvatarPane: 'Toggle avatar pane',
     toggleBotVaultPane: 'Toggle BotVault pane',
+    toggleBrowserPane: 'Toggle browser pane',
     toggleWorkspaceMode: 'Toggle workspace mode',
     changeColorMode: 'Change color mode…',
     pets: {

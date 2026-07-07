@@ -6,6 +6,8 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { $avatarState, type AvatarState } from '@/store/avatar'
 
+import { VoiceControls } from '../voice'
+
 /**
  * [Optimus Cockpit] Avatar/presence pane — Phase 1 increments 2 + 4.
  *
@@ -92,6 +94,9 @@ export function AvatarPane() {
       <span className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-secondary)">
         {t.avatarPane.states[state]}
       </span>
+      {/* Phase 4 P1D-1: the voice client lives in this pane (Steve
+          2026-07-06) — it is the surface for live conversational state. */}
+      <VoiceControls />
     </div>
   )
 }

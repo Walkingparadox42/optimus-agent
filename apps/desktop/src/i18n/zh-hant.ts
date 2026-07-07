@@ -900,6 +900,29 @@ export const zhHant = defineLocale({
     emptyTitle: '保險庫是空的',
     emptyBody: '保險庫中還沒有檔案。'
   },
+  browserPane: {
+    aria: '遠端瀏覽器',
+    title: '瀏覽器',
+    passwordPlaceholder: 'VNC 密碼',
+    connect: '連線',
+    connecting: '正在連線遠端瀏覽器…',
+    disconnect: '中斷連線',
+    authFailed: '驗證失敗。',
+    lost: '連線已關閉。'
+  },
+  voicePanel: {
+    serverUrlPlaceholder: '語音伺服器 URL',
+    tokenPlaceholder: '語音權杖',
+    connect: '連線語音',
+    connecting: '正在連線…',
+    disconnect: '中斷語音',
+    holdToTalk: '按住說話',
+    capturing: '正在聆聽…',
+    thinking: '正在思考…',
+    speaking: '正在說話 — 按下可打斷',
+    micDenied: '麥克風存取被拒絕。',
+    connFailed: '語音連線失敗。'
+  },
   avatarPane: {
     title: '虛擬形象',
     states: {
@@ -957,6 +980,7 @@ export const zhHant = defineLocale({
     changeTheme: '變更主題',
     toggleAvatarPane: '切換虛擬形象面板',
     toggleBotVaultPane: '切換 BotVault 面板',
+    toggleBrowserPane: '切換瀏覽器面板',
     toggleWorkspaceMode: '切換工作區模式',
     changeColorMode: '變更色彩模式…',
     pets: {

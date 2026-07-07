@@ -1,0 +1,314 @@
+/**
+ * [Optimus Cockpit] Voice session client — Phase 4 P1D-1 (push-to-talk).
+ *
+ * The renderer owns the microphone (ADR-0013): this client speaks the
+ * :9125 WS protocol directly (second socket alongside the tui_gateway
+ * connection — it does not replace it). Push-to-talk defers D3: hold =
+ * stream kind=1 mic frames, release = audio.input.commit; a press while
+ * the assistant is audible is a barge-in (voice.interrupt carrying the
+ * played-samples high-water mark, ADR-0006 steps 3-4).
+ *
+ * Epoch discipline (ADR-0005): the client tracks generation_epoch and
+ * drops any delta or audio frame from an older epoch — the server already
+ * discards stale events, this is the client-side backstop the spec
+ * requires. tts.playback.stop semantics under burst sending: "barge-in"
+ * flushes the buffer NOW; "end" only marks that no more frames are coming
+ * (the service finishes SENDING long before playback finishes — flushing
+ * on "end" would amputate the un-played tail).
+ */
+
+import { setAvatarListening } from '@/store/avatar'
+import { setVoicePlaybackState } from '@/store/voice-playback'
+
+import { MicCapture } from './mic'
+import { VoicePlaybackQueue } from './playback'
+import { FLAG_LAST, KIND_MIC, KIND_TTS, packFrame, parseFrame, type ServerMessage } from './protocol'
+import {
+  $voiceAnswer,
+  $voiceConnection,
+  $voiceError,
+  $voiceTranscript,
+  $voiceTurnPhase
+} from './store'
+
+export class VoiceClient {
+  private ws: null | WebSocket = null
+  private mic = new MicCapture()
+  private playback = new VoicePlaybackQueue()
+  private epoch = 0
+  private micSeq = 0
+  private playbackSequence = 0
+  private holding = false
+  private turnDone = false
+  // Set by a tts.filler announcement; cleared when that stream's last-chunk
+  // flag arrives. Filler audio must not count toward played_samples.
+  private incomingStreamIsFiller = false
+
+  constructor() {
+    this.playback.onDrain = () => {
+      if (this.turnDone && !this.holding) {
+        this.setPhase('idle')
+      }
+
+      this.setSpeakingIndicator(false)
+    }
+
+    this.mic.onFrame = pcm => {
+      this.ws?.send(packFrame(KIND_MIC, 0, this.epoch, this.micSeq, pcm))
+      this.micSeq += 1
+    }
+  }
+
+  get connected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN
+  }
+
+  async connect(serverUrl: string, token: string): Promise<void> {
+    if (this.ws) {
+      return
+    }
+
+    $voiceError.set(null)
+    $voiceConnection.set('connecting')
+
+    try {
+      await this.mic.open()
+    } catch {
+      $voiceConnection.set('disconnected')
+      $voiceError.set('mic-denied')
+
+      return
+    }
+
+    const ws = new WebSocket(`${serverUrl}?token=${encodeURIComponent(token)}`)
+    ws.binaryType = 'arraybuffer'
+    this.ws = ws
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ message: 'session.start', mode: 'conversation_active' }))
+    }
+
+    ws.onmessage = event => {
+      if (typeof event.data === 'string') {
+        this.onJson(JSON.parse(event.data) as ServerMessage)
+      } else {
+        this.onBinary(event.data as ArrayBuffer)
+      }
+    }
+
+    ws.onerror = () => {
+      $voiceError.set('connection-failed')
+    }
+
+    ws.onclose = () => {
+      this.ws = null
+      this.teardownTurnState()
+      $voiceConnection.set('disconnected')
+    }
+  }
+
+  disconnect(): void {
+    // session.end first so the service tears down cleanly (its disconnect
+    // backstop would also stop any live run — P0.7 — but be explicit).
+    if (this.connected) {
+      this.ws?.send(JSON.stringify({ message: 'session.end' }))
+    }
+
+    this.ws?.close()
+    this.ws = null
+    this.teardownTurnState()
+    this.mic.close()
+    this.playback.close()
+    $voiceConnection.set('disconnected')
+  }
+
+  /** PTT down. A press while the assistant is audible is a barge-in. */
+  pttDown(): void {
+    if (!this.connected) {
+      return
+    }
+
+    if (this.playback.playing || $voiceTurnPhase.get() === 'thinking' || $voiceTurnPhase.get() === 'speaking') {
+      this.bargeIn()
+    }
+
+    this.holding = true
+    this.micSeq = 0
+    this.turnDone = false
+    $voiceTranscript.set('')
+    $voiceAnswer.set('')
+    this.mic.start()
+    this.setPhase('capturing')
+    setAvatarListening(true)
+  }
+
+  /** PTT up: flush the tail frame, commit the utterance. */
+  pttUp(): void {
+    if (!this.holding) {
+      return
+    }
+
+    this.holding = false
+    const tail = this.mic.stop()
+
+    if (tail && tail.length > 0) {
+      this.ws?.send(packFrame(KIND_MIC, 0, this.epoch, this.micSeq, tail))
+      this.micSeq += 1
+    }
+
+    setAvatarListening(false)
+
+    if (this.micSeq === 0) {
+      // Nothing captured (tap without audio): no commit, back to idle.
+      this.setPhase('idle')
+
+      return
+    }
+
+    this.ws?.send(JSON.stringify({ message: 'audio.input.commit' }))
+    this.setPhase('thinking')
+  }
+
+  private bargeIn(): void {
+    const played = this.playback.playedAnswerSamples()
+    this.ws?.send(JSON.stringify({ message: 'voice.interrupt', played_samples: played }))
+    // Flush immediately — do not wait for tts.playback.stop to round-trip;
+    // the whole point of barge-in is that audio dies NOW (spec section 6).
+    this.playback.flush()
+    this.setSpeakingIndicator(false)
+  }
+
+  private onJson(message: ServerMessage): void {
+    switch (message.message) {
+      case 'agent.text.delta': {
+        if (message.generation_epoch < this.epoch) {
+          return // stale-epoch backstop
+        }
+
+        $voiceAnswer.set($voiceAnswer.get() + String(message.text ?? ''))
+
+        break
+      }
+
+      case 'error': {
+        $voiceError.set(String(message.text ?? 'unknown'))
+
+        break
+      }
+
+      case 'response.done': {
+        this.turnDone = true
+
+        if (message.status === 'ignored' || !this.playback.playing) {
+          this.setPhase('idle')
+          this.setSpeakingIndicator(false)
+        }
+
+        break
+      }
+
+      case 'response.interrupted': {
+        this.epoch = message.generation_epoch
+        this.playback.flush()
+        this.setSpeakingIndicator(false)
+
+        if (!this.holding) {
+          this.setPhase('idle')
+        }
+
+        break
+      }
+
+      case 'session.ready': {
+        this.epoch = message.generation_epoch
+        $voiceConnection.set('ready')
+        this.setPhase('idle')
+
+        break
+      }
+
+      case 'stt.final':
+      case 'stt.partial': {
+        $voiceTranscript.set(String(message.text ?? ''))
+
+        break
+      }
+
+      case 'tts.filler': {
+        this.incomingStreamIsFiller = true
+
+        break
+      }
+
+      case 'tts.playback.stop': {
+        if (message.reason === 'barge-in') {
+          this.playback.flush()
+          this.setSpeakingIndicator(false)
+        }
+
+        // reason "end": no more frames coming; let the buffer drain.
+        break
+      }
+
+      default:
+        // tool.started / tool.result etc.: no UI surface in P1D-1.
+        break
+    }
+  }
+
+  private onBinary(buffer: ArrayBuffer): void {
+    const frame = parseFrame(buffer)
+
+    if (!frame || frame.kind !== KIND_TTS) {
+      return
+    }
+
+    if (frame.epoch < this.epoch) {
+      return // stale audio from a superseded response (ADR-0005)
+    }
+
+    const isAnswer = !this.incomingStreamIsFiller
+
+    if (frame.flags & FLAG_LAST) {
+      this.incomingStreamIsFiller = false
+    }
+
+    if (frame.pcm.length > 0) {
+      this.playback.enqueue(frame.pcm, isAnswer)
+
+      if ($voiceTurnPhase.get() !== 'capturing') {
+        this.setPhase('speaking')
+      }
+
+      this.setSpeakingIndicator(true)
+    }
+  }
+
+  private setPhase(phase: 'capturing' | 'idle' | 'speaking' | 'thinking'): void {
+    $voiceTurnPhase.set(phase)
+  }
+
+  private setSpeakingIndicator(speaking: boolean): void {
+    this.playbackSequence += 1
+    setVoicePlaybackState({
+      audioElement: null,
+      messageId: null,
+      sequence: this.playbackSequence,
+      source: speaking ? 'voice-conversation' : null,
+      status: speaking ? 'speaking' : 'idle'
+    })
+  }
+
+  private teardownTurnState(): void {
+    this.holding = false
+    this.turnDone = false
+    this.incomingStreamIsFiller = false
+    this.playback.flush()
+    this.setSpeakingIndicator(false)
+    setAvatarListening(false)
+    $voiceTurnPhase.set('idle')
+  }
+}
+
+/** One client per renderer window; the avatar pane mounts/unmounts around it. */
+export const voiceClient = new VoiceClient()

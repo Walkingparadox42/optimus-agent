@@ -796,6 +796,29 @@ export interface Translations {
     emptyTitle: string
     emptyBody: string
   }
+  browserPane: {
+    aria: string
+    title: string
+    passwordPlaceholder: string
+    connect: string
+    connecting: string
+    disconnect: string
+    authFailed: string
+    lost: string
+  }
+  voicePanel: {
+    serverUrlPlaceholder: string
+    tokenPlaceholder: string
+    connect: string
+    connecting: string
+    disconnect: string
+    holdToTalk: string
+    capturing: string
+    thinking: string
+    speaking: string
+    micDenied: string
+    connFailed: string
+  }
   avatarPane: {
     title: string
     states: {
@@ -853,6 +876,7 @@ export interface Translations {
     changeTheme: string
     toggleAvatarPane: string
     toggleBotVaultPane: string
+    toggleBrowserPane: string
     toggleWorkspaceMode: string
     changeColorMode: string
     pets: {

@@ -1092,6 +1092,29 @@ export const zh: Translations = {
     emptyTitle: '保险库为空',
     emptyBody: '保险库中还没有文件。'
   },
+  browserPane: {
+    aria: '远程浏览器',
+    title: '浏览器',
+    passwordPlaceholder: 'VNC 密码',
+    connect: '连接',
+    connecting: '正在连接远程浏览器…',
+    disconnect: '断开连接',
+    authFailed: '认证失败。',
+    lost: '连接已关闭。'
+  },
+  voicePanel: {
+    serverUrlPlaceholder: '语音服务器 URL',
+    tokenPlaceholder: '语音令牌',
+    connect: '连接语音',
+    connecting: '正在连接…',
+    disconnect: '断开语音',
+    holdToTalk: '按住说话',
+    capturing: '正在聆听…',
+    thinking: '正在思考…',
+    speaking: '正在说话 — 按下可打断',
+    micDenied: '麦克风访问被拒绝。',
+    connFailed: '语音连接失败。'
+  },
   avatarPane: {
     title: '虚拟形象',
     states: {
@@ -1149,6 +1172,7 @@ export const zh: Translations = {
     changeTheme: '更改主题',
     toggleAvatarPane: '切换虚拟形象面板',
     toggleBotVaultPane: '切换 BotVault 面板',
+    toggleBrowserPane: '切换浏览器面板',
     toggleWorkspaceMode: '切换工作区模式',
     changeColorMode: '更改颜色模式…',
     pets: {

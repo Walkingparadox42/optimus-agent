@@ -929,6 +929,29 @@ export const ja = defineLocale({
     emptyTitle: 'ボルトは空です',
     emptyBody: 'ボルトにはまだファイルがありません。'
   },
+  browserPane: {
+    aria: 'リモートブラウザ',
+    title: 'ブラウザ',
+    passwordPlaceholder: 'VNCパスワード',
+    connect: '接続',
+    connecting: 'リモートブラウザに接続中…',
+    disconnect: '切断',
+    authFailed: '認証に失敗しました。',
+    lost: '接続が閉じられました。'
+  },
+  voicePanel: {
+    serverUrlPlaceholder: '音声サーバーURL',
+    tokenPlaceholder: '音声トークン',
+    connect: '音声を接続',
+    connecting: '接続中…',
+    disconnect: '音声を切断',
+    holdToTalk: '押しながら話す',
+    capturing: '聞いています…',
+    thinking: '考えています…',
+    speaking: '話しています — 押すと中断',
+    micDenied: 'マイクへのアクセスが拒否されました。',
+    connFailed: '音声接続に失敗しました。'
+  },
   avatarPane: {
     title: 'アバター',
     states: {
@@ -986,6 +1009,7 @@ export const ja = defineLocale({
     changeTheme: 'テーマを変更',
     toggleAvatarPane: 'アバターペインを切り替え',
     toggleBotVaultPane: 'BotVaultペインを切り替え',
+    toggleBrowserPane: 'ブラウザペインを切り替え',
     toggleWorkspaceMode: 'ワークスペースモードを切り替え',
     changeColorMode: 'カラーモードを変更…',
     pets: {

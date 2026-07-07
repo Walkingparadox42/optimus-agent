@@ -38,6 +38,7 @@ export const PREVIEW_PANE_ID = 'preview'
 // disabled outside workspace mode, so stock layout never shows them).
 export const AVATAR_PANE_ID = 'avatar'
 export const BOTVAULT_PANE_ID = 'botvault'
+export const BROWSER_PANE_ID = 'browser'
 export const RIGHT_RAIL_PREVIEW_TAB_ID = 'preview'
 
 export type RightRailTabId = typeof RIGHT_RAIL_PREVIEW_TAB_ID | `file:${string}`
@@ -47,6 +48,7 @@ ensurePaneRegistered(FILE_BROWSER_PANE_ID, { open: false })
 ensurePaneRegistered(PREVIEW_PANE_ID, { open: true })
 ensurePaneRegistered(AVATAR_PANE_ID, { open: false })
 ensurePaneRegistered(BOTVAULT_PANE_ID, { open: false })
+ensurePaneRegistered(BROWSER_PANE_ID, { open: false })
 
 export const $sidebarOpen: ReadableAtom<boolean> = computed(
   $paneStates,
@@ -207,6 +209,10 @@ export function toggleAvatarPaneOpen() {
 
 export function toggleBotVaultPaneOpen() {
   togglePane(BOTVAULT_PANE_ID)
+}
+
+export function toggleBrowserPaneOpen() {
+  togglePane(BROWSER_PANE_ID)
 }
 
 export function setFileBrowserOpen(open: boolean) {
