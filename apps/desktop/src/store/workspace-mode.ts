@@ -37,7 +37,12 @@ const WORKSPACE_PANE_SEED: Record<string, PaneStateSnapshot> = {
   [BOTVAULT_PANE_ID]: { open: true },
   [BROWSER_PANE_ID]: { open: true },
   [CHAT_SIDEBAR_PANE_ID]: { open: true },
-  [FILE_BROWSER_PANE_ID]: { open: true },
+  // The root (full-filesystem) file browser does NOT exist in workspace mode
+  // (Steve, 2026-07-07): its Pane is disabled there and every file-surface
+  // affordance (titlebar edge button, view.showFiles / view.toggleRightSidebar
+  // keybinds) drives BotVault instead. Seeded closed for hygiene — the entry
+  // is inert while the pane is disabled.
+  [FILE_BROWSER_PANE_ID]: { open: false },
   [PREVIEW_PANE_ID]: { open: true }
 }
 

@@ -932,7 +932,12 @@ export const en: Translations = {
     thinking: 'Thinking…',
     speaking: 'Speaking — press to interrupt',
     micDenied: 'Microphone access denied.',
-    connFailed: 'Voice connection failed.'
+    connFailed: 'Voice connection failed.',
+    echoTest: 'Echo test (capture without interrupting)',
+    alwaysOn: 'Always-on (wake word)',
+    wakeHint: 'Say "Hey Jarvis"',
+    wakeLoading: 'Loading wake models…',
+    wakeFailed: 'Wake engine failed to load.'
   },
   avatarPane: {
     title: 'Avatar',

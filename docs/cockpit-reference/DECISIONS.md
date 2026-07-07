@@ -221,7 +221,7 @@ regardless of how the upstream cancellation question resolves.
 
 ---
 
-## ADR-0008: Echo handling - mic stays live during TTS; AEC target; raised VAD acceptable first proof; pausing capture is banned | Status: Accepted | 2026-07-04
+## ADR-0008: Echo handling - mic stays live during TTS; AEC target; raised VAD acceptable first proof; pausing capture is banned | Status: Accepted | 2026-07-04 | AEC target RESOLVED 2026-07-06: satisfied by construction under ADR-0013's topology (playback + capture both in Chromium; getUserMedia echoCancellation IS WebRTC AEC3 with the renderer's own output as loopback reference). Measured clean in the P1D-2 pre-step echo test - speech parsed accurately over live Piper playback, zero self-leakage. No AEC porting; work item closed (Steve).
 
 ### Context
 Barge-in is impossible if the mic is paused while Optimus is speaking. But a live mic
@@ -468,3 +468,50 @@ supersedes all such language.**
   a reason to fall back to /v1/responses.
 - run_id is the cancellation handle: the voice service must retain it per turn,
   keyed by generation_epoch (ADR-0005), so barge-in can stop the right run.
+
+---
+
+## ADR-0015: D3 - wake word gates session entry; open-mic VAD inside the window; PTT retained | Status: Accepted | 2026-07-07
+
+### Context
+D3 (CLAUDE.md open decision: wake word vs open-mic VAD for always-on) was held
+until real data existed. The P1D-2 pre-step measured: Chromium's AEC is CLEAN in
+the ADR-0013 topology (speech parsed accurately over live Piper playback, zero
+self-leakage - ADR-0008's AEC target resolved by construction), and the ambient
+environment is a normal home: background media sometimes present, moderate,
+never loud. The Phase 4 gate tolerates ZERO false activations over 10+ minutes.
+
+### Options considered
+- Open-mic VAD only: fails the gate's zero-tolerance in this environment. Two
+  unfixable-by-threshold failure modes: intermittent media speech + AGC pumping
+  makes threshold crossings a per-session coin flip (one crossing that
+  transcribes as real words passes the transcript gate and burns a false turn);
+  and the ADDRESSING problem - speech aimed at another person in the room is
+  acoustically and textually indistinguishable from a command.
+- Wake word only (every turn re-woken): robust but hostile ergonomics for
+  follow-ups.
+- Hybrid: wake word opens a conversation WINDOW; open-mic VAD handles turns and
+  barge-in inside it; window closes on timeout. The spec's section 8 mode enum
+  (idle_wake_only, wake_ack, waiting_for_followup...) was written for this split.
+
+### Decision
+Hybrid (Steve, 2026-07-07). Wake word gates session ENTRY; open-mic VAD runs
+INSIDE the window; PTT remains the always-available manual override. Sub-choices
+(Steve, same date): engine = openWakeWord - fully local, no phone-home in the
+wake path, accepting the integration plumbing over Porcupine's AccessKey
+dependency; stock "hey jarvis" model first to prove the pipeline, custom
+"Hey Optimus" as a follow-up increment (bare "Optimus" rejected - too short);
+timeouts 8s wake-ack window, 8s follow-up window, no hard session cap; wake-ack
+= local chime + avatar ring, no spoken response (Piper ack stays a future
+preference).
+
+### Consequences
+- Privacy property, structural: in idle_wake_only every mic frame is consumed
+  ONLY by the local wake engine in the renderer; nothing crosses the network
+  until wake fires. Verified at the P1D-2 gate via service logs.
+- Voice barge-in inside the window rides the raised-VAD-during-SPEAKING trick
+  (ADR-0008 sanctioned), safe because AEC is measured-clean.
+- VAD-only always-on can ship later as a tuning toggle for quiet contexts
+  without touching this architecture.
+- The wake engine sits behind a WakeEngine seam (mirrors TTSEngine/STTEngine):
+  the "Hey Optimus" model swap, or an engine swap, never touches the policy.

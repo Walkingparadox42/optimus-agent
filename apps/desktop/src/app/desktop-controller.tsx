@@ -206,6 +206,7 @@ export function DesktopController() {
   const terminalTakeover = useStore($terminalTakeover)
   const reviewOpen = useStore($reviewOpen)
   const fileBrowserOpen = useStore($fileBrowserOpen)
+  const botVaultOpen = useStore($paneOpen(BOTVAULT_PANE_ID))
   const previewPaneOpen = useStore($paneOpen(PREVIEW_PANE_ID))
   const panesFlipped = useStore($panesFlipped)
   const profileScope = useStore($profileScope)
@@ -1184,9 +1185,13 @@ export function DesktopController() {
 
   // Other sidebars docked as real columns on the terminal's rail. Force-collapsed
   // hover-reveal overlays (narrow window) don't take a column, so they don't count.
+  // In workspace mode the file surface on the rail is BotVault, not the root
+  // file browser (which is disabled there entirely).
+  const fileSurfaceOpen = workspaceMode ? botVaultOpen : fileBrowserOpen
+
   const railColumnOpen =
     (chatOpen && Boolean(previewTarget || filePreviewTarget) && previewPaneOpen) ||
-    (chatOpen && !narrowViewport && fileBrowserOpen) ||
+    (chatOpen && !narrowViewport && fileSurfaceOpen) ||
     (chatOpen && Boolean(currentCwd.trim()) && !narrowViewport && reviewOpen)
 
   // Once the terminal would share its rail with another sidebar, drop it to a
@@ -1213,7 +1218,12 @@ export function DesktopController() {
   const fileBrowserPane = (
     <Pane
       defaultOpen={false}
-      disabled={!chatOpen}
+      // [Optimus Cockpit] The root (full-filesystem) file browser does not
+      // exist in workspace mode (Steve, 2026-07-07): no pane, no hover strip,
+      // no overlay — BotVault is the workspace's file surface, and the edge
+      // toggles (titlebar button, view.toggleRightSidebar / view.showFiles
+      // keybinds) drive it instead there. Stock mode unchanged.
+      disabled={!chatOpen || workspaceMode}
       forceCollapsed={narrowViewport}
       hoverReveal
       id="file-browser"

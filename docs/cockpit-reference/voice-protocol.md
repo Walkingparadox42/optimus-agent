@@ -278,6 +278,15 @@ The server uses mode mainly for endpointing patience and follow-up behavior; lon
 modes (conversation/session) use longer silence windows so short pauses do not commit
 a turn early.
 
+P1D-2 (2026-07-07, built): session.mode.set is now implemented on the service
+(previously spec-only) and exercised by the always-on client, which reports
+listening_for_turn on window open / utterance start, waiting_for_followup after
+playback drains, and idle_wake_only on window close. The window policy itself is
+ADR-0015: wake word opens the window (8s ack timeout), open-mic VAD runs inside it
+(8s follow-up window after each answer), PTT overrides at any time. In
+idle_wake_only, mic audio is consumed ONLY by the renderer-local wake engine -
+no frames reach this protocol until wake fires.
+
 ---
 
 ## 9. Logging requirements (from Phase 1 task 5)

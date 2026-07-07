@@ -29,3 +29,17 @@ export const $voiceTurnPhase = atom<VoiceTurnPhase>('idle')
 export const $voiceTranscript = atom('')
 export const $voiceAnswer = atom('')
 export const $voiceError = atom<null | string>(null)
+
+// P1D-2 data-gathering (session-only, not persisted): when on, PTT captures
+// WITHOUT barging in, so the mic is hot while Piper plays through the
+// speakers — the ADR-0008 echo topology. Whatever transcript comes back is
+// the measured leakage through Chromium's AEC. Kept as a debug tool (the
+// measurement it produced decided D3 and closed ADR-0008's AEC item).
+export const $voiceEchoTest = atom(false)
+
+// P1D-2 always-on: persisted preference (survives restarts like the other
+// cockpit settings) + live wake-engine state for the UI/avatar.
+export type VoiceWakeState = 'error' | 'listening' | 'loading' | 'off' | 'window'
+
+export const $voiceAlwaysOn = persistentAtom('optimus.voice.alwaysOn', false, Codecs.bool)
+export const $voiceWakeState = atom<VoiceWakeState>('off')

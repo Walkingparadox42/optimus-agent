@@ -145,3 +145,7 @@ apps/desktop/demo/
 infographic/
 assets/
 *.wav
+
+# Optimus Cockpit P1D-2: the wake-pipeline test fixture is a committed asset
+# (Piper-synthesized "Hey Jarvis", 16k PCM) - exempt it from the global *.wav.
+!apps/desktop/src/app/voice/__fixtures__/*.wav

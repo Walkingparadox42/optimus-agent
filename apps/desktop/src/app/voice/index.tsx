@@ -6,15 +6,19 @@ import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
+import { alwaysOn } from './always-on'
 import { voiceClient } from './client'
 import {
+  $voiceAlwaysOn,
   $voiceAnswer,
   $voiceConnection,
+  $voiceEchoTest,
   $voiceError,
   $voiceServerUrl,
   $voiceToken,
   $voiceTranscript,
-  $voiceTurnPhase
+  $voiceTurnPhase,
+  $voiceWakeState
 } from './store'
 
 /**
@@ -38,6 +42,9 @@ export function VoiceControls() {
   const error = useStore($voiceError)
   const serverUrl = useStore($voiceServerUrl)
   const token = useStore($voiceToken)
+  const echoTest = useStore($voiceEchoTest)
+  const alwaysOnPref = useStore($voiceAlwaysOn)
+  const wakeState = useStore($voiceWakeState)
 
   const connect = useCallback(
     (event: FormEvent) => {
@@ -48,7 +55,19 @@ export function VoiceControls() {
   )
 
   // Pane unmount (workspace mode off / app teardown) → drop mic + socket.
-  useEffect(() => () => voiceClient.disconnect(), [])
+  useEffect(() => () => {
+    alwaysOn.disable()
+    voiceClient.disconnect()
+  }, [])
+
+  // Always-on follows the persisted preference while a session is live.
+  useEffect(() => {
+    if (connection === 'ready' && alwaysOnPref) {
+      void alwaysOn.enable()
+    } else {
+      alwaysOn.disable()
+    }
+  }, [alwaysOnPref, connection])
 
   const errorText =
     error === 'mic-denied' ? v.micDenied : error === 'connection-failed' ? v.connFailed : error
@@ -120,6 +139,35 @@ export function VoiceControls() {
           {answer}
         </p>
       )}
+      {/* P1D-2: wake-word always-on toggle (D3: wake gates entry, open-mic
+          VAD inside the window, PTT above stays the manual override). */}
+      <label className="flex items-center gap-1.5 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+        <input
+          checked={alwaysOnPref}
+          onChange={event => $voiceAlwaysOn.set(event.target.checked)}
+          type="checkbox"
+        />
+        {v.alwaysOn}
+      </label>
+      {wakeState === 'listening' && (
+        <p className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">{v.wakeHint}</p>
+      )}
+      {wakeState === 'loading' && (
+        <p className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">{v.wakeLoading}</p>
+      )}
+      {wakeState === 'error' && (
+        <p className="text-[length:var(--conversation-caption-font-size)] text-(--ui-red)">{v.wakeFailed}</p>
+      )}
+      {/* P1D-2 data gathering: capture without barging in, so the mic is hot
+          while Piper is audible — measures Chromium AEC leakage (ADR-0008). */}
+      <label className="flex items-center gap-1.5 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+        <input
+          checked={echoTest}
+          onChange={event => $voiceEchoTest.set(event.target.checked)}
+          type="checkbox"
+        />
+        {v.echoTest}
+      </label>
       <Button onClick={() => voiceClient.disconnect()} size="sm" variant="ghost">
         {v.disconnect}
       </Button>

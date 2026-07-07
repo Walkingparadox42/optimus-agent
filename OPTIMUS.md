@@ -1019,6 +1019,85 @@ permission prompt, PTT feel — that is the gate.
    journal on CT115 shows "transcript truncated ... basis=played_samples".
 4. Speak again after barge-in: next turn works (epoch discipline held).
 
+### Phase 4 P1D-2 pre-step — AEC/D3 data gathering (INSTRUMENTED 2026-07-06; measurement pending Steve)
+
+D3 (wake word vs open-mic VAD vs keep-PTT) gets decided with real data.
+Blocker found and fixed for the measurement itself: stock P1D-1 PTT
+barges in on press, killing playback BEFORE capture starts — so it
+physically cannot measure echo-during-TTS. Added a session-only "Echo
+test (capture without interrupting)" checkbox to the voice controls
+(+ i18n x5): when on, PTT captures with Piper still audible — the exact
+ADR-0008 mic-live topology. Whatever transcript comes back IS the
+measured leakage through Chromium's AEC. Typecheck/lint clean.
+
+Topology note that reframes ADR-0008: its "AEC with loopback reference
+(WebRTC AEC3)" target was written when the audio client might be a
+separate Python process. Post-ADR-0013 both playback AND capture live in
+Chromium, whose getUserMedia echoCancellation IS WebRTC AEC3 with the
+renderer's own output as the loopback reference. The target may be
+satisfied by construction — this measurement verifies it.
+
+Echo-test protocol (Steve, ~5 min, results decide D3):
+1. Echo test ON. Ask for something long (counting works). While Piper
+   speaks, hold PTT, stay SILENT ~3s, release. Repeat 2-3x at normal
+   volume. Clean AEC = transcript-gate drop ("ignored") or empty; leakage
+   = Piper's own words in the transcript. (Timing: hold during the later
+   part of the answer; if the turn is still in flight server-side the
+   frames are discarded and commit errors — just retry a moment later.)
+2. Echo test ON. Same, but SPEAK over Piper ("what time is it"). Clean =
+   your words, accurate; poor = mixed/garbled transcript.
+3. Describe the ambient reality of the room the MiniPC lives in: TV or
+   music with SPEECH regularly? Other people talking? Or mostly quiet?
+   (AEC only cancels the app's own output — third-party speech is what
+   forces wake-word gating.)
+
+Decision tree (recommendation finalized when 1-3 come back):
+- Echo clean + quiet room -> open-mic VAD is viable; wake word optional.
+- Echo clean + speech-heavy ambient -> WAKE WORD (energy VAD cannot pass
+  the zero-false-activation gate against TV speech; the transcript gate
+  does not help - TV speech is real speech).
+- Echo dirty -> raised-VAD-during-SPEAKING first (ADR-0008 sanctioned),
+  loopback-reference AEC port only if that fails; D3 per ambient as above.
+- Any doubt -> keep PTT as the shipped mode and add always-on behind a
+  toggle later; PTT already passed its gate and is usable daily.
+
+**RESULTS (Steve, 2026-07-06): AEC CLEAN.** Speech parsed accurately
+while Piper was actively speaking; zero leakage of Piper's own audio as
+false transcript. ADR-0013's topology satisfies ADR-0008's
+loopback-reference AEC target by construction — NO AEC porting needed.
+Ambient: normal home — background media sometimes present, moderate,
+never loud, not silent.
+
+**D3 DECIDED (Steve, 2026-07-06): WAKE WORD gates session ENTRY; open-mic
+VAD runs INSIDE the conversation window; PTT retained as the
+always-available manual override. To be written as the D3 ADR when P1D-2
+starts. ADR-0008's AEC target marked RESOLVED in DECISIONS.md (satisfied
+by construction, measured not assumed — work item dead).**
+Original recommendation reasoning, kept for the record:
+Reasoning:
+- Open-mic-VAD-only is borderline-to-failing against the Phase 4 gate at
+  this ambient level, for two reasons energy thresholds cannot fix:
+  (1) intermittent moderate media speech + AGC (autoGainControl pumps
+  quiet backgrounds up during silence) makes threshold crossings a
+  per-session coin flip, and ONE crossing that transcribes as real words
+  passes the transcript gate and burns a false Hermes turn — the gate
+  tolerance is zero; (2) the ADDRESSING problem: open-mic treats ALL
+  human speech as intent — Steve talking to another person in the room
+  is a false activation no VAD or transcript gate can distinguish.
+- Wake word solves addressing and ambient in one mechanism, matches the
+  Satellite1 "OK Nabu" prior art in this same home, and matches root
+  CLAUDE.md's stated delta-4 architecture ("local VAD + wake-word gate
+  in the renderer").
+- Once a window is OPEN (post-wake, conversation_active /
+  waiting_for_followup), open-mic endpointing is correct and desirable —
+  the spec's section 8 mode enum (idle_wake_only, wake_ack, ...) was
+  written for exactly this split. Barge-in inside the window stays
+  voice-driven. Window timeout returns to idle_wake_only.
+- Engine choice (openWakeWord via onnxruntime-web vs Porcupine web SDK,
+  and the custom "Optimus" model question) is a P1D-2 PLANNING decision,
+  not part of D3. VAD-only mode can ship later as a tuning toggle for
+  quiet contexts without touching the architecture.
+
 ### Phase 4 P1D — renderer voice client (PROPOSAL 2026-07-06; P1D-1 built above, P1D-2 not started)
 
 Scope: the FIRST Phase 4 code inside this repo. Per ADR-0013 the Electron
@@ -1085,6 +1164,149 @@ Open questions to settle at P1D planning (not decided here):
   need porting (ADR-0008 allows raised-VAD-first)? Measure in P1D-1.
 - Where the voice UI lives: inside the avatar pane, its own small pane,
   or a composer-adjacent control. Cheap to move later; pick at planning.
+
+(All P1D-1 questions answered and built; P1D-1 gate passed 2026-07-06.)
+
+### Phase 4 P1D-2 — always-on voice (BUILT 2026-07-07 as proposed; gate pending Steve at the real machine)
+
+Built per the proposal below with Steve's four answers applied (openWakeWord;
+stock "hey jarvis" first, "Hey Optimus" custom model is a follow-up
+increment; 8s/8s/no-cap timeouts; chime + avatar ring). D3 written as
+ADR-0015 per the ratification.
+
+**Wake pipeline (the load-bearing new piece), validated before wiring:**
+- Model I/O shapes inspected from the actual ONNX files with onnxruntime
+  on CT115 (not assumed from docs).
+- Reference implementation validated in Python on CT115 FIRST: Piper "Hey
+  Jarvis" scores 0.998/0.999, other speech and noise 0.000, ~1ms per 80ms
+  chunk. Approach: recompute the mel window per 80ms step instead of
+  porting openWakeWord's incremental buffering — a few redundant ms buys
+  out an entire class of alignment bugs.
+- TS port (`wake-pipeline.ts`, pure logic behind a WakeSession interface)
+  verified by a model-in-the-loop vitest: the REAL committed models + a
+  committed Piper "Hey Jarvis" WAV fixture, run on onnxruntime-web's WASM
+  backend in Node — the same runtime the renderer uses. Activates on the
+  fixture, silent on noise.
+
+**What was added (all additive):**
+- `public/wake/` — the three openWakeWord ONNX models (~3.7MB, committed;
+  same pattern as the avatar assets). onnxruntime-web's ~11MB WASM is NOT
+  committed — vite bundles it from node_modules via a relative `?url`
+  import (the package's exports map blocks subpath imports; root hoisting
+  is guaranteed by the repo's own assert-root-install.cjs).
+- `wake-engine.ts` (WakeEngine seam, mirrors TTSEngine/STTEngine; 2s
+  refractory so one phrase fires once), `vad.ts` (energy VAD: 500 RMS /
+  200ms start, 1500 RMS / 300ms raised barge-in threshold), `chime.ts`
+  (WebAudio two-tone, zero assets), `always-on.ts` (the ADR-0015 state
+  machine: wake -> chime + window -> VAD-opened utterances -> follow-up
+  window armed on PLAYBACK DRAIN, not response.done — burst sending means
+  the window would otherwise burn while Piper is still audible).
+- Client hooks: mic tap (frames to wake/VAD stay local), utterance-stream
+  API (VAD-opened turns; server's silence endpoint closes them, signalled
+  by stt.final), session.mode.set sender, event emitter, public interrupt.
+- Service: session.mode.set handler implemented (was spec-only) —
+  deployed to CT115, service healthy.
+- UI: "Always-on (wake word)" toggle (persisted preference), wake status
+  hints; PTT and echo-test unchanged. i18n x5.
+- .gitignore: negation added for the committed WAV test fixture (a global
+  *.wav rule would have silently dropped it from commits).
+
+**Machine verification:** typecheck clean; lint clean (pre-existing
+warning elsewhere); 7/7 voice tests including the real-model wake test;
+full renderer build passes. NOT machine-verifiable: real wake-phrase
+detection on a live mic, chime audibility, the 10-minute ambient soak —
+that is the gate.
+
+**P1D-2 gate (Steve, at the MiniPC — this IS the CLAUDE.md Phase 4 gate):**
+1. Connect voice, tick "Always-on (wake word)". Status shows the wake
+   hint. Say "Hey Jarvis" -> chime + avatar ring within ~half a second.
+2. Speak a request with NO button: transcript appears, Piper answers.
+   Within 8s of the answer finishing, ask a follow-up WITHOUT re-waking.
+   Let it time out; confirm it stops listening (avatar ring off).
+3. Talk over Piper mid-answer: playback dies (voice barge-in via raised
+   VAD), answer to your new question follows.
+4. The soak: leave the mic hot 10+ minutes with normal ambient
+   (background media at your usual level). ZERO chimes, ZERO turns.
+   Service journal shows NO utterances during the soak (privacy check:
+   idle frames never left the machine — journal has no mic activity at
+   all between windows).
+5. PTT still works at any time, including during an open window.
+
+### Phase 4 P1D-2 — always-on voice (original PROPOSAL 2026-07-06; built above)
+
+Implements the decided D3 policy: wake word gates session ENTRY, open-mic
+VAD inside the conversation window, PTT retained. Renderer-side per root
+CLAUDE.md delta 4; behind a mode toggle in the voice controls so PTT
+remains the shipped default until the P1D-2 gate passes.
+
+**Session flow (spec section 8 modes, finally exercised):**
+idle_wake_only — mic hot, wake engine runs LOCALLY in the renderer;
+NOTHING leaves the MiniPC until wake fires (this is the privacy property
+delta 4 demands: "the agent only receives intentional speech"; verified
+at the gate via service logs showing zero pre-wake frames).
+-> wake detected -> wake_ack (local ack sound + avatar listening ring,
+instant, no round trip) -> conversation window OPEN: client VAD detects
+utterance start/stop, frames stream as today, server silence endpoint
+stays as backstop; turns/fillers/barge-in exactly as built.
+-> waiting_for_followup after each answer (window stays hot for a
+follow-up without re-waking) -> timeout -> window closes ->
+idle_wake_only. session.mode.set (spec s3, unused so far) tells the
+service the current mode so its silence windows adapt.
+
+**Voice barge-in inside the window:** speech during SPEAKING = interrupt
+(two-trigger design, bridge notes s5: client energy gate first). Safe at
+this ambient because AEC is measured-clean — the gate only hears Steve,
+not Piper. Only-while-speaking gating per the bridge notes; PTT press
+remains the guaranteed manual interrupt.
+
+**Build shape:** WakeEngine seam (mirrors TTSEngine/STTEngine — engine
+swappable, policy stable); client VAD module (energy-based first, same
+raised-threshold-during-SPEAKING trick ADR-0008 sanctions if needed);
+mode state machine in client.ts; toggle UI. All additive in
+src/app/voice/.
+
+**Gate = the Phase 4 gate from CLAUDE.md, verbatim:** mic hot 10+ minutes
+with ambient noise, ZERO false activations under the wake-word policy;
+mid-response barge-in truncates audio with no ghost playback and no stale
+tool side effects. Plus: wake-to-ack latency feels instant (<500ms), and
+the privacy check (no frames leave pre-wake).
+
+**OPEN QUESTIONS — Steve decides before build:**
+
+Q1. Wake engine:
+  (a) openWakeWord — Apache-2 open source, ONNX models run in-renderer
+      via onnxruntime-web (WASM). Community models exist ("hey jarvis",
+      "alexa"...); custom "hey Optimus" is trainable offline with their
+      tooling. Fully local forever, no keys, no license server. Cost:
+      more integration plumbing (onnxruntime-web + mel-spectrogram
+      preprocessing in the renderer), and custom-model training is a
+      side quest.
+  (b) Porcupine (@picovoice/porcupine-web) — polished WASM SDK, high
+      accuracy, trivial integration, built-in keywords (jarvis,
+      computer, terminator...). Custom "Optimus" made in their web
+      console. Cost: requires a Picovoice AccessKey validated against
+      their servers (an external/cloud dependency in the wake path —
+      against this project's local-only ethos), free tier limits.
+  Recommendation: (a) openWakeWord, accepting the plumbing, because the
+  wake path should not phone home; (b) only if pragmatism wins.
+
+Q2. Wake phrase: "hey Optimus" (custom, either engine, best
+  false-accept behavior) vs bare "Optimus" (shorter = more false
+  accepts) vs a stock phrase to start ("hey Jarvis" community model /
+  Porcupine built-in "Jarvis" or "Computer") while the custom model is
+  trained. Recommendation: start on a stock phrase to prove the
+  pipeline, train "hey Optimus" as a follow-up increment.
+
+Q3. Window-timeout defaults (all tunable later; numbers need
+  ratification): wake_ack listen window 8s (woke but said nothing ->
+  close); waiting_for_followup 8s after each answer; no hard session
+  cap (windows close on silence, wake reopens cheaply). Silence-endpoint
+  windows inside a turn stay as built (P1C mode map).
+
+Q4. Wake-ack sound: (a) short local chime asset (instant, recommended);
+  (b) Piper speaking an ack ("Yes?") — warmer but adds TTS latency to
+  every wake; (c) silent, avatar-ring only. Recommendation: (a) chime +
+  avatar ring; Piper ack available later as a preference.
 
 Downstream notes: `$avatarListening` (src/store/avatar.ts) is the seam the
 listening state plugs into; ADR-0008 (mic stays live during TTS, pausing
@@ -1441,3 +1663,57 @@ defines the browser.* event family too, so copying it serves both phases.
 
 Phases 0, 0.5, and Phase 1 increments 1-3 are DONE and gated (increment 3
 with the live-update known limitation logged above).
+
+---
+
+## Future goals (recorded 2026-07-07 — explicitly NOT blocking any current phase or gate)
+
+Captured so they don't get lost. No phase, no gate, no commitment to an
+approach; revisit when the current work settles.
+
+**FG-1: Reduce Hermes first-token latency on the voice path.**
+Measured 13-16s to first delta (P1B, 2026-07-06). The progress-filler
+system (spec section 7) covers the gap acceptably for now — but the
+long-term goal is making the actual response faster so fillers matter
+less, not just papering over a slow backend. Directions to investigate
+when picked up (none scoped or chosen):
+- Model/provider choice for VOICE turns specifically — a spoken
+  conversational turn may not need the same model as text chat (the
+  /v1/runs body already accepts a model field; the voice service is the
+  natural place to route differently).
+- Reducing context/prompt overhead on the voice path.
+- A faster-first-token strategy generally.
+
+**FG-2: Custom Optimus voice (separate from FG-1).**
+The original architecture doc parked "a private, local, non-distributed
+Optimus-inspired custom voice built from private-use samples" as future
+work, not blocking core functionality. Piper en_US-lessac-medium is
+working well (P1.5 gate: "dramatically more natural"). When revisited,
+this means either training/fine-tuning a Piper voice on custom samples,
+or evaluating other LOCAL TTS options capable of voice cloning — in
+either case behind the existing TTSEngine seam, the same swap pattern
+already proven by the espeak-ng -> Piper increment. Data-locality rule
+stands (ADR-0011 context): private audio samples never leave the LAN.
+
+**FG-3: In-window background-media false turns (the "addressing problem",
+observed live 2026-07-07).**
+During P1D-2 testing, always-on mode picked up YouTube audio as if it were
+user speech INSIDE an open conversation window. Wake-word detection itself
+is confirmed working correctly — the gate held; the issue is the open-mic
+window treating third-party media as addressed speech once a window is
+open. This is exactly the addressing problem named in the D3 analysis
+(ADR-0015 Context): AEC cancels Optimus's OWN voice (measured clean), but
+it cannot cancel audio it has no reference for — a video, TV, or another
+person. The D3 hybrid confines the exposure to open windows (8s ack / 8s
+follow-up), which is why this is a tuning matter and not an architecture
+problem. NOT blocking; deferred to a future tuning pass. Possible
+directions (none scoped or chosen):
+- Stricter in-window silence/VAD thresholds (raise VAD_START_RMS /
+  sustain frames in vad.ts; cheapest knob, costs sensitivity to quiet
+  speech).
+- A secondary confirmation for ambiguous turns before burning a Hermes
+  run (e.g. transcript-gate heuristics for "was that addressed to me").
+- Accepting PTT or wake-word-per-utterance as the reliable mode for noisy
+  environments (both already exist: PTT is always available, and
+  shortening/zeroing the follow-up window approximates per-utterance
+  waking).

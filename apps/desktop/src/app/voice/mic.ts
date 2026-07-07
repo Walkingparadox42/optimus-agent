@@ -35,8 +35,13 @@ export class MicCapture {
   private stream: MediaStream | null = null
   private pending = new Float32Array(0)
   private capturing = false
-  /** Receives one 100 ms PCM16 frame at a time while capturing. */
+  /** Receives one 100 ms PCM16 frame at a time while capturing (PTT hold). */
   onFrame: ((pcm: Int16Array) => void) | null = null
+  /** P1D-2: receives EVERY frame while the mic is open, independent of
+   *  capturing — feeds the local wake engine and in-window VAD. Frames
+   *  reaching this tap never leave the machine unless the always-on
+   *  controller explicitly forwards them (post-wake). */
+  onTap: ((pcm: Int16Array) => void) | null = null
 
   async open(): Promise<void> {
     if (this.context) {
@@ -65,7 +70,7 @@ export class MicCapture {
     const node = new AudioWorkletNode(context, 'pcm-capture')
 
     node.port.onmessage = (event: MessageEvent<Float32Array>) => {
-      if (!this.capturing) {
+      if (!this.capturing && !this.onTap) {
         return
       }
 
@@ -76,7 +81,13 @@ export class MicCapture {
       let offset = 0
 
       while (merged.length - offset >= FRAME_SAMPLES) {
-        this.onFrame?.(floatToPcm16(merged.subarray(offset, offset + FRAME_SAMPLES)))
+        const frame = floatToPcm16(merged.subarray(offset, offset + FRAME_SAMPLES))
+        this.onTap?.(frame)
+
+        if (this.capturing) {
+          this.onFrame?.(frame)
+        }
+
         offset += FRAME_SAMPLES
       }
 

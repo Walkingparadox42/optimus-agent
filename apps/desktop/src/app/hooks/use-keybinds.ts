@@ -11,10 +11,13 @@ import { $repoStatus } from '@/store/coding-status'
 import { toggleCommandPalette } from '@/store/command-palette'
 import { $capture, $comboIndex, endCapture, setBinding, toggleKeybindPanel } from '@/store/keybinds'
 import {
+  BOTVAULT_PANE_ID,
   CHAT_SIDEBAR_PANE_ID,
   FILE_BROWSER_PANE_ID,
   requestSessionSearchFocus,
+  setBotVaultPaneOpen,
   setFileBrowserOpen,
+  toggleBotVaultPaneOpen,
   toggleFileBrowserOpen,
   togglePanesFlipped,
   toggleSidebarOpen
@@ -42,6 +45,7 @@ import {
   switcherJustClosed
 } from '@/store/session-switcher'
 import { openNewSessionInNewWindow } from '@/store/windows'
+import { $workspaceMode } from '@/store/workspace-mode'
 import { useTheme } from '@/themes/context'
 
 import { requestComposerFocus, requestVoiceToggle } from '../chat/composer/focus'
@@ -108,8 +112,17 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     goToSession(openOrAdvanceSwitcher(direction))
   }
 
+  // [Optimus Cockpit] In workspace mode the root file browser does not exist;
+  // the file-surface keybinds drive the BotVault pane instead.
+  const workspaceOn = () => $workspaceMode.get()
+
   const showFiles = () => {
-    setFileBrowserOpen(true)
+    if (workspaceOn()) {
+      setBotVaultPaneOpen(true)
+    } else {
+      setFileBrowserOpen(true)
+    }
+
     setTerminalTakeover(false)
   }
 
@@ -156,8 +169,12 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
       }
     },
     'view.toggleRightSidebar': () => {
+      const paneId = workspaceOn() ? BOTVAULT_PANE_ID : FILE_BROWSER_PANE_ID
+
       if (matchesQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)) {
-        window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: FILE_BROWSER_PANE_ID } }))
+        window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: paneId } }))
+      } else if (workspaceOn()) {
+        toggleBotVaultPaneOpen()
       } else {
         toggleFileBrowserOpen()
       }

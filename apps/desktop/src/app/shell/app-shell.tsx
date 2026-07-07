@@ -11,11 +11,12 @@ import {
   $fileBrowserOpen,
   $panesFlipped,
   $sidebarOpen,
+  BOTVAULT_PANE_ID,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_PANE_ID,
   setSidebarOpen
 } from '@/store/layout'
-import { $paneWidthOverride } from '@/store/panes'
+import { $paneOpen, $paneWidthOverride } from '@/store/panes'
 import { $connection } from '@/store/session'
 import { isSecondaryWindow } from '@/store/windows'
 
@@ -81,9 +82,11 @@ export function AppShell({
 }: AppShellProps) {
   const sidebarOpen = useStore($sidebarOpen)
   const fileBrowserOpen = useStore($fileBrowserOpen)
+  const botVaultOpen = useStore($paneOpen(BOTVAULT_PANE_ID))
   const panesFlipped = useStore($panesFlipped)
   const narrowViewport = useMediaQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)
   const fileBrowserWidthOverride = useStore($paneWidthOverride(FILE_BROWSER_PANE_ID))
+  const botVaultWidthOverride = useStore($paneWidthOverride(BOTVAULT_PANE_ID))
   const connection = useStore($connection)
   const viewportFullscreen = useSyncExternalStore(subscribeWindowSize, viewportIsFullscreen, () => false)
   const isFullscreen = Boolean(connection?.isFullscreen) || viewportFullscreen
@@ -118,7 +121,11 @@ export function AppShell({
   // hover-reveal overlay (0px track) below the collapse breakpoint, so the edge
   // is uncovered there regardless of their stored open state. A standalone
   // session window renders no sidebar at all, so its edge is always uncovered.
-  const collapsibleLeftPaneOpen = panesFlipped ? fileBrowserOpen : sidebarOpen
+  // [Optimus Cockpit] In workspace mode the root file browser does not exist;
+  // BotVault is the file surface on that edge, so the inset/gap math below
+  // keys on whichever one the current mode actually renders.
+  const fileSurfaceOpen = workspaceMode ? botVaultOpen : fileBrowserOpen
+  const collapsibleLeftPaneOpen = panesFlipped ? fileSurfaceOpen : sidebarOpen
   // The terminal + preview rails never force-collapse, so when they're the
   // leftmost open pane (flipped layout) they cover the edge even when narrow.
   const persistentLeftPaneOpen = panesFlipped && (terminalPaneOpen || previewPaneOpen)
@@ -143,15 +150,19 @@ export function AppShell({
   const paneToolCount = titlebarTools?.filter(tool => !tool.hidden).length ?? 0
   const systemToolsWidth = `calc(${SYSTEM_TOOL_COUNT} * (var(--titlebar-control-size) + 0.25rem))`
 
-  const fileBrowserWidth =
-    fileBrowserWidthOverride !== undefined ? `${fileBrowserWidthOverride}px` : FILE_BROWSER_DEFAULT_WIDTH
+  const fileSurfaceWidthOverride = workspaceMode ? botVaultWidthOverride : fileBrowserWidthOverride
+
+  const fileSurfaceWidth =
+    fileSurfaceWidthOverride !== undefined ? `${fileSurfaceWidthOverride}px` : FILE_BROWSER_DEFAULT_WIDTH
 
   // Where the pane-tool cluster's right edge sits, measured from the inner
   // titlebar padding (--titlebar-tools-right). Two anchors:
-  //   - file-browser closed → flush against static cluster's left edge
-  //   - file-browser open   → flush against the file-browser pane's left edge
+  //   - file surface closed → flush against static cluster's left edge
+  //   - file surface open   → flush against that pane's left edge
   //                           (= preview pane's right edge)
-  const previewToolbarGap = fileBrowserOpen ? fileBrowserWidth : systemToolsWidth
+  // "File surface" = root file browser in stock mode, BotVault in workspace
+  // mode (both share the same default width).
+  const previewToolbarGap = fileSurfaceOpen ? fileSurfaceWidth : systemToolsWidth
 
   // Used by the drag region to know where the rightmost interactive element
   // ends. When pane tools are present, that's `gap + paneCount * controlSize

@@ -219,9 +219,18 @@ export function setFileBrowserOpen(open: boolean) {
   setPaneOpen(FILE_BROWSER_PANE_ID, open)
 }
 
+export function setBotVaultPaneOpen(open: boolean) {
+  setPaneOpen(BOTVAULT_PANE_ID, open)
+}
+
 // "Reveal this file in the file-browser tree" — an absolute path the tree
 // subscribes to, expanding ancestor folders and selecting/scrolling to it. Reset
 // to null by the tree once consumed.
+// NOTE (2026-07-07): currently a dormant seam — the tree subscribes but nothing
+// in the app sets this yet. If a producer is ever added: in workspace mode the
+// root file browser does not exist, so route to the BotVault tree when the path
+// is under the vault root, and no-op otherwise (decision recorded with the
+// workspace-mode removal of the root pane).
 export const $revealInTreeRequest = atom<null | string>(null)
 
 export function revealFileInTree(path: string): void {

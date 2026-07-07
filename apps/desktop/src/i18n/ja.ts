@@ -950,7 +950,12 @@ export const ja = defineLocale({
     thinking: '考えています…',
     speaking: '話しています — 押すと中断',
     micDenied: 'マイクへのアクセスが拒否されました。',
-    connFailed: '音声接続に失敗しました。'
+    connFailed: '音声接続に失敗しました。',
+    echoTest: 'エコーテスト（中断せずにキャプチャ）',
+    alwaysOn: '常時オン（ウェイクワード）',
+    wakeHint: '「Hey Jarvis」と話しかけてください',
+    wakeLoading: 'ウェイクモデルを読み込み中…',
+    wakeFailed: 'ウェイクエンジンの読み込みに失敗しました。'
   },
   avatarPane: {
     title: 'アバター',

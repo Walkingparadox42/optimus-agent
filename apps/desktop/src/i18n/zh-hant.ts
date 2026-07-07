@@ -921,7 +921,12 @@ export const zhHant = defineLocale({
     thinking: '正在思考…',
     speaking: '正在說話 — 按下可打斷',
     micDenied: '麥克風存取被拒絕。',
-    connFailed: '語音連線失敗。'
+    connFailed: '語音連線失敗。',
+    echoTest: '回聲測試（不中斷播放的擷取）',
+    alwaysOn: '常開（喚醒詞）',
+    wakeHint: '說 "Hey Jarvis"',
+    wakeLoading: '正在載入喚醒模型…',
+    wakeFailed: '喚醒引擎載入失敗。'
   },
   avatarPane: {
     title: '虛擬形象',

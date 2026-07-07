@@ -14,10 +14,14 @@ import {
   $fileBrowserOpen,
   $panesFlipped,
   $sidebarOpen,
+  BOTVAULT_PANE_ID,
+  toggleBotVaultPaneOpen,
   toggleFileBrowserOpen,
   togglePanesFlipped,
   toggleSidebarOpen
 } from '@/store/layout'
+import { $paneOpen } from '@/store/panes'
+import { $workspaceMode } from '@/store/workspace-mode'
 
 import { appViewForPath, isOverlayView } from '../routes'
 
@@ -52,6 +56,8 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
   const location = useLocation()
   const hapticsMuted = useStore($hapticsMuted)
   const fileBrowserOpen = useStore($fileBrowserOpen)
+  const botVaultOpen = useStore($paneOpen(BOTVAULT_PANE_ID))
+  const workspaceMode = useStore($workspaceMode)
   const sidebarOpen = useStore($sidebarOpen)
   const panesFlipped = useStore($panesFlipped)
 
@@ -71,7 +77,12 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
   // swaps which pane each one toggles. Default: sessions left, file browser
   // right. Flipped: file browser left, sessions right. Sidebar toggles never
   // carry an active highlight — they're plain show/hide affordances.
-  const fileBrowserEdge = { open: fileBrowserOpen, toggle: toggleFileBrowserOpen }
+  // [Optimus Cockpit] In workspace mode the root file browser does not exist;
+  // the file-surface edge button drives the BotVault pane instead.
+  const fileBrowserEdge = workspaceMode
+    ? { open: botVaultOpen, toggle: toggleBotVaultPaneOpen }
+    : { open: fileBrowserOpen, toggle: toggleFileBrowserOpen }
+
   const sessionsEdge = { open: sidebarOpen, toggle: toggleSidebarOpen }
   const leftEdge = panesFlipped ? fileBrowserEdge : sessionsEdge
   const rightEdge = panesFlipped ? sessionsEdge : fileBrowserEdge

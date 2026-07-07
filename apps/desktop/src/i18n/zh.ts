@@ -1113,7 +1113,12 @@ export const zh: Translations = {
     thinking: '正在思考…',
     speaking: '正在说话 — 按下可打断',
     micDenied: '麦克风访问被拒绝。',
-    connFailed: '语音连接失败。'
+    connFailed: '语音连接失败。',
+    echoTest: '回声测试（不打断播放的采集）',
+    alwaysOn: '常开（唤醒词）',
+    wakeHint: '说 "Hey Jarvis"',
+    wakeLoading: '正在加载唤醒模型…',
+    wakeFailed: '唤醒引擎加载失败。'
   },
   avatarPane: {
     title: '虚拟形象',

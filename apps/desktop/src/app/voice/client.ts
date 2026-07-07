@@ -26,10 +26,14 @@ import { FLAG_LAST, KIND_MIC, KIND_TTS, packFrame, parseFrame, type ServerMessag
 import {
   $voiceAnswer,
   $voiceConnection,
+  $voiceEchoTest,
   $voiceError,
   $voiceTranscript,
   $voiceTurnPhase
 } from './store'
+
+/** Lifecycle signals the always-on controller (P1D-2) listens to. */
+export type VoiceClientEvent = 'playback.drained' | 'response.done' | 'response.interrupted' | 'stt.final'
 
 export class VoiceClient {
   private ws: null | WebSocket = null
@@ -39,10 +43,14 @@ export class VoiceClient {
   private micSeq = 0
   private playbackSequence = 0
   private holding = false
+  // P1D-2: true while the always-on controller streams an utterance
+  // (VAD-opened, no PTT hold).
+  private streamingUtterance = false
   private turnDone = false
   // Set by a tts.filler announcement; cleared when that stream's last-chunk
   // flag arrives. Filler audio must not count toward played_samples.
   private incomingStreamIsFiller = false
+  private listeners = new Map<VoiceClientEvent, Set<(payload?: unknown) => void>>()
 
   constructor() {
     this.playback.onDrain = () => {
@@ -51,6 +59,7 @@ export class VoiceClient {
       }
 
       this.setSpeakingIndicator(false)
+      this.emit('playback.drained')
     }
 
     this.mic.onFrame = pcm => {
@@ -61,6 +70,85 @@ export class VoiceClient {
 
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN
+  }
+
+  get busyWithTurn(): boolean {
+    const phase = $voiceTurnPhase.get()
+
+    return phase === 'thinking' || phase === 'speaking'
+  }
+
+  get audible(): boolean {
+    return this.playback.playing
+  }
+
+  get pttHeld(): boolean {
+    return this.holding
+  }
+
+  on(event: VoiceClientEvent, listener: (payload?: unknown) => void): () => void {
+    const set = this.listeners.get(event) ?? new Set()
+    set.add(listener)
+    this.listeners.set(event, set)
+
+    return () => void set.delete(listener)
+  }
+
+  private emit(event: VoiceClientEvent, payload?: unknown): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener(payload)
+    }
+  }
+
+  /** Mic tap for the always-on controller: every frame while the mic is
+   *  open, PTT or not. Frames stay local unless explicitly forwarded. */
+  setTapListener(listener: ((pcm: Int16Array) => void) | null): void {
+    this.mic.onTap = listener
+  }
+
+  /** Inform the service of the client's window mode (spec session.mode.set)
+   *  so its silence-endpoint windows adapt. */
+  sendModeSet(mode: string): void {
+    if (this.connected) {
+      this.ws?.send(JSON.stringify({ message: 'session.mode.set', mode }))
+    }
+  }
+
+  /** P1D-2: begin a VAD-opened utterance (no PTT). Frames are forwarded via
+   *  feedUtteranceFrame; the SERVER ends the utterance (silence endpoint),
+   *  signalled back by stt.final. */
+  startUtteranceStream(): boolean {
+    if (!this.connected || this.holding || this.busyWithTurn) {
+      return false
+    }
+
+    this.streamingUtterance = true
+    this.micSeq = 0
+    this.turnDone = false
+    $voiceTranscript.set('')
+    $voiceAnswer.set('')
+    this.setPhase('capturing')
+    setAvatarListening(true)
+
+    return true
+  }
+
+  feedUtteranceFrame(pcm: Int16Array): void {
+    if (!this.streamingUtterance) {
+      return
+    }
+
+    this.ws?.send(packFrame(KIND_MIC, 0, this.epoch, this.micSeq, pcm))
+    this.micSeq += 1
+  }
+
+  get streaming(): boolean {
+    return this.streamingUtterance
+  }
+
+  /** Public barge-in for the always-on controller (voice-triggered). */
+  interrupt(): void {
+    this.bargeIn()
   }
 
   async connect(serverUrl: string, token: string): Promise<void> {
@@ -122,19 +210,31 @@ export class VoiceClient {
     $voiceConnection.set('disconnected')
   }
 
-  /** PTT down. A press while the assistant is audible is a barge-in. */
+  /** PTT down. A press while the assistant is audible is a barge-in —
+   *  unless the echo-test toggle is on (P1D-2 data gathering): then capture
+   *  runs WITH playback still audible, so the transcript measures what
+   *  leaks through Chromium's AEC (ADR-0008 topology). */
   pttDown(): void {
     if (!this.connected) {
       return
     }
 
-    if (this.playback.playing || $voiceTurnPhase.get() === 'thinking' || $voiceTurnPhase.get() === 'speaking') {
+    const echoTest = $voiceEchoTest.get()
+
+    if (
+      !echoTest &&
+      (this.playback.playing || $voiceTurnPhase.get() === 'thinking' || $voiceTurnPhase.get() === 'speaking')
+    ) {
       this.bargeIn()
     }
 
     this.holding = true
     this.micSeq = 0
-    this.turnDone = false
+
+    if (!echoTest) {
+      this.turnDone = false
+    }
+
     $voiceTranscript.set('')
     $voiceAnswer.set('')
     this.mic.start()
@@ -204,6 +304,8 @@ export class VoiceClient {
           this.setSpeakingIndicator(false)
         }
 
+        this.emit('response.done', message)
+
         break
       }
 
@@ -216,6 +318,8 @@ export class VoiceClient {
           this.setPhase('idle')
         }
 
+        this.emit('response.interrupted', message)
+
         break
       }
 
@@ -227,7 +331,21 @@ export class VoiceClient {
         break
       }
 
-      case 'stt.final':
+      case 'stt.final': {
+        $voiceTranscript.set(String(message.text ?? ''))
+
+        // A VAD-opened utterance ends when the SERVER endpoints it.
+        if (this.streamingUtterance) {
+          this.streamingUtterance = false
+          setAvatarListening(false)
+          this.setPhase('thinking')
+        }
+
+        this.emit('stt.final', message)
+
+        break
+      }
+
       case 'stt.partial': {
         $voiceTranscript.set(String(message.text ?? ''))
 
@@ -301,6 +419,7 @@ export class VoiceClient {
 
   private teardownTurnState(): void {
     this.holding = false
+    this.streamingUtterance = false
     this.turnDone = false
     this.incomingStreamIsFiller = false
     this.playback.flush()

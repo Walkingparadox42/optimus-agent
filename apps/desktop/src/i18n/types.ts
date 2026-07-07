@@ -818,6 +818,11 @@ export interface Translations {
     speaking: string
     micDenied: string
     connFailed: string
+    echoTest: string
+    alwaysOn: string
+    wakeHint: string
+    wakeLoading: string
+    wakeFailed: string
   }
   avatarPane: {
     title: string
