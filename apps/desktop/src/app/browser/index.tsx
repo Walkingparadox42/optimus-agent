@@ -25,13 +25,14 @@ import { SidebarPanelLabel } from '../shell/sidebar-label'
  *
  * The framebuffer is fixed 1024x768 (CT119 sketch); noVNC's scaleViewport
  * scales it into the pane preserving aspect (letterboxing internally).
- * The VNC password is entered in-pane per session — kept in component state
- * only, never persisted, never in the repo (build-time auth requirement in
- * OPTIMUS.md Phase 6; secure storage is a later decision if needed).
+ * The VNC password is remembered in this renderer's local storage after a
+ * successful connection so workspace toggles/app restarts auto-login without
+ * committing the secret to source control.
  */
 
 // CT119 "search-services" noVNC/websockify endpoint (see CLAUDE.md LAN map).
 const VNC_WS_URL = 'ws://192.168.0.119:9127/websockify'
+const VNC_PASSWORD_STORAGE_KEY = 'optimus.browser.vncPassword'
 
 type ConnectionPhase = 'connected' | 'connecting' | 'idle'
 
@@ -45,23 +46,21 @@ export function BrowserPane() {
   // True once 'securityfailure' fired for the in-flight attempt, so the
   // following 'disconnect' event reports a auth error instead of a generic one.
   const authFailedRef = useRef(false)
+  const autoConnectAttemptedRef = useRef(false)
 
   const [phase, setPhase] = useState<ConnectionPhase>('idle')
   const [error, setError] = useState<null | string>(null)
-  // Session-only; deliberately not persisted anywhere.
-  const [password, setPassword] = useState('')
+  const [password, setPassword] = useState(() => localStorage.getItem(VNC_PASSWORD_STORAGE_KEY) ?? '')
 
   const disconnect = useCallback(() => {
     rfbRef.current?.disconnect()
   }, [])
 
-  const connect = useCallback(
-    (event: FormEvent) => {
-      event.preventDefault()
-
+  const connectWithPassword = useCallback(
+    (nextPassword: string) => {
       const target = viewportRef.current
 
-      if (!target || rfbRef.current) {
+      if (!target || !nextPassword || rfbRef.current) {
         return
       }
 
@@ -69,11 +68,12 @@ export function BrowserPane() {
       setPhase('connecting')
       authFailedRef.current = false
 
-      const rfb = new RFB(target, VNC_WS_URL, { credentials: { password } })
+      const rfb = new RFB(target, VNC_WS_URL, { credentials: { password: nextPassword } })
       rfb.scaleViewport = true
       rfbRef.current = rfb
 
       rfb.addEventListener('connect', () => {
+        localStorage.setItem(VNC_PASSWORD_STORAGE_KEY, nextPassword)
         setPhase('connected')
         rfb.focus()
       })
@@ -88,14 +88,33 @@ export function BrowserPane() {
         setPhase('idle')
 
         if (authFailedRef.current) {
+          localStorage.removeItem(VNC_PASSWORD_STORAGE_KEY)
+          setPassword('')
           setError(b.authFailed)
         } else if (!clean) {
           setError(b.lost)
         }
       })
     },
-    [b.authFailed, b.lost, password]
+    [b.authFailed, b.lost]
   )
+
+  const connect = useCallback(
+    (event: FormEvent) => {
+      event.preventDefault()
+      connectWithPassword(password)
+    },
+    [connectWithPassword, password]
+  )
+
+  useEffect(() => {
+    if (autoConnectAttemptedRef.current || !password || localStorage.getItem(VNC_PASSWORD_STORAGE_KEY) !== password) {
+      return
+    }
+
+    autoConnectAttemptedRef.current = true
+    connectWithPassword(password)
+  }, [connectWithPassword, password])
 
   // Unmount (workspace mode off / app teardown) → drop the socket.
   useEffect(() => () => rfbRef.current?.disconnect(), [])
