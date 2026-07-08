@@ -935,9 +935,17 @@ export const en: Translations = {
     connFailed: 'Voice connection failed.',
     echoTest: 'Echo test (capture without interrupting)',
     alwaysOn: 'Always-on (wake word)',
-    wakeHint: 'Say "Hey Jarvis"',
+    wakeHint: 'Say "Hey Optimus"',
     wakeLoading: 'Loading wake models…',
     wakeFailed: 'Wake engine failed to load.'
+  },
+  meetingPanel: {
+    record: 'Record meeting',
+    stop: 'Stop',
+    uploading: 'Uploading…',
+    transcribing: 'Transcribing…',
+    saved: 'Saved',
+    micDenied: 'Microphone access denied.'
   },
   avatarPane: {
     title: 'Avatar',

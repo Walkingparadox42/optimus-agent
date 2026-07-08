@@ -59,3 +59,44 @@ decision: periodic `hermes cron list` audits; treating cron/script creation
 as approval-gated actions on CT115; never assuming prompt instructions bound
 agent behavior when designing voice-phase flows. Any of these, if adopted,
 becomes an ADR.
+
+---
+
+## SN-002: Self-hosted Honcho (192.168.0.222) dialectic backend hangs — silent ~11s tax on every Hermes profile's fresh turns | Observed 2026-07-07
+
+### What was observed
+Diagnosing voice first-token latency (OPTIMUS.md FG-1) surfaced a homelab-infra
+problem that is NOT voice-specific and NOT Optimus-Cockpit-specific. Recorded here
+because it affects every Hermes profile and deserves its own investigation
+independent of this project.
+
+Hermes memory (`memory.provider: honcho`) points at a SELF-HOSTED Honcho at
+`http://192.168.0.222:8000` (per `/root/.hermes/honcho.json`, `baseUrl`). The
+server's HTTP/storage layer is UP and healthy — `/health` 200, `/docs` 200, all
+sub-3ms; message writes work. But the DIALECTIC endpoint (`peer.chat`, the
+LLM-reasoning-over-memory call) HANGS to a 30s client timeout and returns nothing
+useful. Agent logs across profiles show repeated
+`Honcho dialectic query failed: Request timed out after 30.0s`.
+
+Because the default `recallMode` was `hybrid`, every FRESH turn blocked ~11s
+(8s first-turn dialectic join + 3s follow-up join) waiting on that dead call
+before the LLM request even started — a silent latency + cost tax paid by voice
+AND text chat AND any profile using this honcho.json, on every new session.
+
+### Why it's its own item, not the voice fix
+The voice path was un-blocked 2026-07-07 by setting `hosts.hermes.recallMode:
+"tools"` (prefetch returns immediately; no blocking join) — see FG-1. But that
+only stops Hermes from WAITING on the broken backend; it does not fix the backend,
+and it does not touch other hosts/profiles (e.g. `hermes_scribe` still `hybrid`,
+still eating the 11s). The actual defect is on the .222 box: its internal
+dialectic reasoning/LLM backend is down, misconfigured, or starved. Until that is
+fixed, Honcho delivers NO cross-session user modeling to any profile — the feature
+is effectively off while still costing latency wherever `recallMode` is `hybrid`.
+
+### Status
+Recorded; not urgent; independent of Optimus Cockpit. Candidate investigation when
+picked up: check the Honcho service on 192.168.0.222 (what LLM/provider its
+dialectic is configured to call, whether that upstream is reachable, logs on the
+.222 box); decide whether to fix it or retire hosted-dialectic memory. If other
+profiles matter in the meantime, flipping their honcho.json host blocks to
+`recallMode: "tools"` stops the bleed without fixing the root cause.

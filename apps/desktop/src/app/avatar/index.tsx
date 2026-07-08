@@ -6,6 +6,7 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { $avatarState, type AvatarState } from '@/store/avatar'
 
+import { MeetingControls } from '../meeting'
 import { VoiceControls } from '../voice'
 
 /**
@@ -97,6 +98,9 @@ export function AvatarPane() {
       {/* Phase 4 P1D-1: the voice client lives in this pane (Steve
           2026-07-06) — it is the surface for live conversational state. */}
       <VoiceControls />
+      {/* Meeting recorder M1: mic-only long-form capture -> BotVault
+          transcript note. Separate mode from the turn-based voice client. */}
+      <MeetingControls />
     </div>
   )
 }

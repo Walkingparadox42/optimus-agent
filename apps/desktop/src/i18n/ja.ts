@@ -953,9 +953,17 @@ export const ja = defineLocale({
     connFailed: '音声接続に失敗しました。',
     echoTest: 'エコーテスト（中断せずにキャプチャ）',
     alwaysOn: '常時オン（ウェイクワード）',
-    wakeHint: '「Hey Jarvis」と話しかけてください',
+    wakeHint: '「Hey Optimus」と話しかけてください',
     wakeLoading: 'ウェイクモデルを読み込み中…',
     wakeFailed: 'ウェイクエンジンの読み込みに失敗しました。'
+  },
+  meetingPanel: {
+    record: '会議を録音',
+    stop: '停止',
+    uploading: 'アップロード中…',
+    transcribing: '文字起こし中…',
+    saved: '保存しました',
+    micDenied: 'マイクへのアクセスが拒否されました。'
   },
   avatarPane: {
     title: 'アバター',

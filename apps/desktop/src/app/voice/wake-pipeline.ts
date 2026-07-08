@@ -3,9 +3,10 @@
  *
  * Pure logic, no renderer/vite imports: takes three pre-created
  * onnxruntime sessions (melspectrogram -> speech embedding -> wake head)
- * and consumes 16 kHz PCM16 in 80 ms steps. Validated 2026-07-07 against
- * the reference models on CT115: Piper "Hey Jarvis" scores 0.998+, other
- * speech and noise score 0.000, ~1 ms per chunk on CPU.
+ * and consumes 16 kHz PCM16 in 80 ms steps. Validated 2026-07-08 against
+ * the first-pass local "Hey Optimus" model trained on CT115. The custom
+ * model needs a stricter threshold than the stock community model while
+ * more real Steve samples are collected.
  *
  * Approach: instead of porting openWakeWord's incremental feature
  * buffering, each 80 ms step recomputes the mel spectrogram over the last
@@ -18,16 +19,17 @@
  *                        OUT         [t, 1, frames, 32]; use x/10 + 2
  *   embedding_model.onnx IN  input_1 [batch, 76, 32, 1]
  *                        OUT         [batch, 1, 1, 96]
- *   hey_jarvis_v0.1.onnx IN  x.1     [1, 16, 96]  OUT [1, 1] score
+ *   hey_optimus_v0.1.onnx IN onnx::Flatten_0 [1, 16, 96] OUT [1, 1] score
  */
 
 export const WAKE_CHUNK_SAMPLES = 1_280 // 80 ms @ 16 kHz
-export const WAKE_THRESHOLD = 0.5
+export const WAKE_THRESHOLD = 0.98
 
 const MEL_BANDS = 32
 const MEL_WINDOW_FRAMES = 76
 const EMBEDDING_DIM = 96
 const SCORE_WINDOW = 16
+const WAKE_INPUT_NAME = 'onnx::Flatten_0'
 // Raw samples needed for 76 mel frames (hop 160, window 400) plus one chunk.
 const RAW_KEEP = (MEL_WINDOW_FRAMES - 1) * 160 + 400 + WAKE_CHUNK_SAMPLES
 
@@ -164,7 +166,7 @@ export class WakePipeline {
     }
 
     const wakeOut = await this.models.wake.run({
-      'x.1': makeTensor(features, [1, SCORE_WINDOW, EMBEDDING_DIM])
+      [WAKE_INPUT_NAME]: makeTensor(features, [1, SCORE_WINDOW, EMBEDDING_DIM])
     })
 
     return (Object.values(wakeOut)[0].data as Float32Array)[0]

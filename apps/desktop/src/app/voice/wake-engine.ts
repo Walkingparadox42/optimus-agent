@@ -4,8 +4,9 @@
  * openWakeWord (D3 decision, Steve 2026-07-07: fully local, no phone-home
  * in the wake path). Runs the three ONNX models in-renderer via
  * onnxruntime-web's WASM backend; model files ship as static assets under
- * public/wake/. Stock "hey jarvis" model first — the custom "Hey Optimus"
- * model is a follow-up increment that only swaps WAKE_MODEL_URL.
+ * public/wake/. Uses a first-pass local "Hey Optimus" openWakeWord model
+ * trained on CT115 from synthetic samples; tune/retrain as real samples
+ * come in.
  *
  * Seam shape mirrors TTSEngine/STTEngine on the service: policy (D3) is
  * stable, the engine behind load()/feed() is swappable.
@@ -36,7 +37,7 @@ ort.env.wasm.wasmPaths = { mjs: ortWasmMjsUrl, wasm: ortWasmUrl }
 import { WAKE_THRESHOLD, type WakeModels, WakePipeline, type WakeTensor } from './wake-pipeline'
 
 const MODEL_BASE = `${import.meta.env.BASE_URL}wake/`
-const WAKE_MODEL_URL = `${MODEL_BASE}hey_jarvis_v0.1.onnx`
+const WAKE_MODEL_URL = `${MODEL_BASE}hey_optimus_v0.1.onnx`
 const MEL_MODEL_URL = `${MODEL_BASE}melspectrogram.onnx`
 const EMBEDDING_MODEL_URL = `${MODEL_BASE}embedding_model.onnx`
 

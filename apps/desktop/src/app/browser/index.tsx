@@ -20,7 +20,8 @@ import { SidebarPanelLabel } from '../shell/sidebar-label'
  * out, over RFB/websockify. The human input path deliberately bypasses the
  * agent entirely (ADR-0012) — nothing typed here ever becomes text in this
  * app or LLM context; it goes canvas → RFB → Xvfb → Firefox. The :9126 agent
- * verb API and Hermes tool wiring are LATER steps and intentionally absent.
+ * verb API lives on CT119 and is called by Hermes directly, not through this
+ * pane.
  *
  * The framebuffer is fixed 1024x768 (CT119 sketch); noVNC's scaleViewport
  * scales it into the pane preserving aspect (letterboxing internally).

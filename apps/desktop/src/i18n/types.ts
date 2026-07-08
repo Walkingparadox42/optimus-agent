@@ -824,6 +824,14 @@ export interface Translations {
     wakeLoading: string
     wakeFailed: string
   }
+  meetingPanel: {
+    record: string
+    stop: string
+    uploading: string
+    transcribing: string
+    saved: string
+    micDenied: string
+  }
   avatarPane: {
     title: string
     states: {

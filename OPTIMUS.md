@@ -1314,6 +1314,120 @@ capture banned) now binds the renderer as the audio owner.
 
 ---
 
+## Meeting recorder (mic-only) — SCOPED 2026-07-07, not started
+
+A separate simple mode: a record button in the avatar pane captures MIC-ONLY
+audio (not system/call audio) for a long continuous session (10-60 min),
+then transcribes -> summarizes -> writes a BotVault note. Explicitly does
+NOT reuse the :9125 conversational protocol (turn-based wake/response/
+barge-in is the wrong shape for continuous recording). Its own additive
+module (e.g. src/app/meeting/), fork-hygiene clean, no VoiceClient/:9125
+coupling.
+
+Feasibility (investigated read-only 2026-07-07): every piece already exists;
+this is assembly + one new endpoint, not new infrastructure.
+- STT: reuse the loaded faster-whisper base.en int8 on the :9125 service,
+  but as ONE batch transcribe() at stop (not per-utterance streaming).
+  Memory is bounded (whisper windows internally); the limit is TIME —
+  ~0.1-0.3x RTF means 60 min audio ~= 6-18 min processing. A batch job,
+  not interactive.
+- Audio transport: record LOCALLY in the renderer (MediaRecorder,
+  echoCancellation OFF for raw room audio) -> upload the whole file on stop.
+  A dropped connection mid-meeting is then a non-event (not streaming);
+  crash insurance = MediaRecorder timeslice flushing chunks to disk via
+  electron main so a renderer crash loses only the last slice.
+- Summarize + write: one Hermes /v1/runs turn (write path (b), below).
+- Renderer write primitive also exists (writeDesktopFileText -> remote-mode
+  POST /api/fs/write-text to CT115) but is NOT the chosen path — see (b).
+
+DECISIONS LOCKED (Steve, 2026-07-07):
+- STT contention: ACCEPT voice being unavailable while a meeting transcribes
+  (the STTEngine's single lock serializes with live voice). Not building a
+  second model instance — using voice mid-transcription is a rare edge case.
+  Revisit only if it bites in practice.
+- Write path (b): hand the transcript to Hermes via /v1/runs; Hermes
+  summarizes AND writes the BotVault note in one turn (creating the target
+  dir if needed), using its own file tools. Matches the established
+  Hermes-writes-its-own-files pattern; sidesteps the parent-must-exist
+  constraint of the renderer write primitive.
+
+NOTE FORMAT — CORRECTED against the live BotVault SCHEMA.md (2026-07-07;
+the original proposal did not fully match, flagged for Steve's ratification):
+- Location: the schema's designated home for transcripts is `raw/`
+  ("immutable ingested source material (articles/papers/TRANSCRIPTS/
+  assets)"), NOT a new top-level `meetings/` folder — the schema explicitly
+  discourages folder proliferation and dropped zero-usage folders. Propose
+  `Optimus/raw/meetings/YYYY-MM-DD-HHMM-<slug>.md` (a meetings/ subfolder
+  under the raw landing zone). A meeting recording IS an immutable ingested
+  transcript, so this is the honest schema fit.
+- Frontmatter: use the schema's ACTUAL key set — title / created / updated /
+  type / tags — not the originally-proposed date/duration/source. So:
+  `type: transcript` (or `meeting`), `tags: [meeting, transcript, botvault]`,
+  with duration + source (mic-recording) as ADDITIONAL frontmatter keys or a
+  body metadata line.
+- Body: `## Summary` section (Hermes-generated) + `## Transcript` section
+  (full raw transcript). One note holds both.
+- OPEN for Steve: ratify `raw/meetings/` + `type: transcript` (schema-
+  aligned) vs the original `meetings/` + `type: meeting` (his first
+  instinct). Cheap to change; not a blocker for M1.
+
+INCREMENT BREAKDOWN (mirrors how voice was sliced — skeleton first, layers
+after):
+- M1 — end-to-end skeleton (BUILT 2026-07-07/08; GATE PASSED Steve
+  2026-07-08 at the real machine). Server: POST /transcribe on the voice service (voice_service.py,
+  phase "P1.5+M1") — multipart audio upload streamed to a tempfile, batch
+  faster-whisper via file path (vad_filter on for long silences), writes the
+  raw transcript note to Optimus/raw/meetings/ per SCHEMA (frontmatter
+  title/created/updated/type:transcript/tags + duration + source; Summary
+  placeholder + Transcript body), returns note_path + transcript JSON.
+  client_max_size raised to ~250MB; same bearer/token as the WS; STTEngine
+  gained transcribe_file() sharing the voice lock (contention accepted).
+  Renderer: NEW src/app/meeting/ (recorder.ts MediaRecorder mic capture,
+  echoCancellation OFF, webm/opus, upload-on-stop; store.ts phase/elapsed;
+  index.tsx record button in the avatar pane with MM:SS + phase label),
+  transcribe URL/token derived from the voice settings, i18n x5.
+  Server VERIFIED end-to-end (2026-07-08): synthesized 15.5s webm ->
+  transcribed 0.6s -> accurate note at the right path, schema-correct
+  frontmatter (test artifact removed). Renderer typecheck/lint/build clean.
+  NOT machine-verifiable headless: real mic + MediaRecorder capture — that
+  IS the gate.
+  CORS FIX (2026-07-08): first gate attempt failed with a browser CORS block
+  — /transcribe is a plain fetch() (unlike the CORS-exempt WS /voice), so the
+  renderer origin must be allowed. Added an aiohttp allowlist middleware
+  (the service is aiohttp, NOT FastAPI/Starlette — that's the CT119 bridge):
+  allows Vite dev (:5174/:5173, 127.0.0.1 + localhost) and the packaged
+  Electron app (loads renderer via file:// -> Origin "null"), extensible via
+  OPTIMUS_CORS_ORIGINS. WS path exempt (prepared-response guard). VERIFIED
+  with real Origin-header curl tests: preflight 204 + ACAO echoed, real
+  upload carries ACAO + writes the note, file:// "null" allowed, disallowed
+  origin gets NO ACAO. Gate is now unblocked.
+  Gate (Steve, at the MiniPC): PASS — workspace mode + avatar pane + real
+  mic MediaRecorder upload now writes an accurate transcript note at
+  Optimus/raw/meetings/YYYY-MM-DD-HHMM-meeting.md. Known limitation:
+  no speaker diarization in M1; plain faster-whisper transcript text only.
+- M2 — summary + note format (BUILT 2026-07-08 on CT115; GATE PASSED Steve
+  2026-07-08 at the real machine). Server phase now reports P1.5+M2. After
+  the durable M1 note write, /transcribe submits a Hermes /v1/runs turn
+  through the normal CT115 backend and asks Hermes to update the exact note
+  path: preserve frontmatter + full Transcript, replace Summary placeholder
+  with Overview / Decisions / Action Items / Open Questions / Notable
+  Details. This keeps the raw transcript safe even if the summary run fails.
+  Synthetic upload smoke test passed: 10.2s espeak webm/wav -> STT ->
+  note -> Hermes summary in 21.4s, placeholder removed, schema-conformant
+  sections present; smoke artifact removed. Known limitation remains no
+  speaker diarization, so prompt tells Hermes not to invent speaker names
+  and to use "Unattributed" when ownership is unclear. Gate PASS: real mic
+  recording produces a note with a useful summary in the right location.
+- M3 — long-duration hardening + UI polish: elapsed MM:SS timer, staged
+  processing UI (uploading -> transcribing -> summarizing -> done + note
+  link), crash-insurance chunk flushing, error handling for hour-long files.
+  Gate: a 30-60 min recording survives and processes.
+Live partial transcript during recording is deliberately OUT of scope for
+v1 (would drag back toward the streaming voice shape); "recording MM:SS"
+then a processing spinner is the v1 UX. Future add-on.
+
+---
+
 ## Phase 6 — Browser viewport (step 0 stack UP; see+click gate pending)
 
 **Step 0 history:** first attempt 2026-07-05 was blocked (CT119 off the
@@ -1568,9 +1682,9 @@ or restart the gateway. A NEW chat/turn sees the tools; an open session keeps
 its frozen snapshot until reload.
 
 **Remaining for Steve:** reload-mcp (or gateway restart) → start a fresh chat →
-ask the agent to use the browser. First write action hangs up to 30s pending
-your curl approval (step-4 gate). Verbs the agent sees: navigate, page_info,
-observe, click, type_text, press.
+ask the agent to use the browser. First gated write action hangs up to 30s
+pending your curl approval (step-4 gate). Verbs the agent sees: navigate,
+page_info, observe, click, type_text, press, restart_browser.
 
 **Phase 6 status:** steps 0,1,2,4 DONE + verified; step 3 config written,
 pending Steve's reload + first agent-drives-browser test. Then Phase 6's core
@@ -1578,6 +1692,30 @@ loop (agent + human share one gated, streamed browser) is complete.
 
 Untouched, per scope: CT117, all Electron/app-repo code (this was a one-line
 CT115 config add + the CT119 services).
+
+### Phase 6 recovery gap — restart_browser verb (BUILT + VERIFIED 2026-07-08)
+
+LinkedIn live testing exposed a real recovery gap: the MCP bridge stayed up,
+but Playwright's page/context was dead (`Target page, context or browser has
+been closed`), and the existing tool surface had no way to relaunch the shared
+browser. Manual `systemctl restart optimus-browser-bridge` recovered it, proving
+the desired recovery primitive.
+
+CT119 `/opt/optimus-browser-bridge/bridge.py` now exposes `restart_browser` as
+a gated write verb. It closes the current Playwright persistent context, clears
+stale `page` / `observed_url` state, restarts Playwright Firefox on the same
+Xvfb display/profile, and returns `{ok, url, title, restart_seconds}`. Startup's
+fail-closed category check includes it under `WRITE_VERBS`, so it cannot bypass
+owner approval.
+
+Verification: bridge compiled and restarted; startup log reports
+`write(gated)=['click', 'press', 'restart_browser', 'type_text']`. CT115
+`hermes mcp test optimus-browser` discovers 7 tools including `restart_browser`.
+An MCP client call created a pending approval, approval via `/approvals/...`
+succeeded, and `restart_browser` returned `ok: true`, `url: about:blank`,
+`restart_seconds: 1.3`. This closes the SSH-only recovery gap. A friendlier
+desktop-pane "Restart browser" button remains a later UI task because the pane
+does not currently have a safe bridge-token/config path.
 
 **ADR-0012 accepted 2026-07-05 (Steve): VNC/noVNC**, matching Joshu's
 approach. Rationale: the free, structurally-guaranteed human-input plane
@@ -1684,6 +1822,103 @@ when picked up (none scoped or chosen):
 - Reducing context/prompt overhead on the voice path.
 - A faster-first-token strategy generally.
 
+DIAGNOSED 2026-07-07 (read-only: agent.log timing forensics + py-spy stack
+sampling of a live turn + run usage). Measured breakdown of a quiet 15.8s
+first-delta turn (P1B run_481d5cd0):
+- 0.3s  run/agent/session init
+- 1.3s  per-turn plugin re-registration churn
+- 11.0s Honcho memory prefetch — first-turn dialectic join (8.0s default
+  timeout) + follow-up join (3.0s), BOTH expiring. py-spy caught the turn
+  thread parked in plugins/memory/honcho prefetch join; agent.log shows
+  the dialectic backend timing out even at 30s (hosted Honcho, never
+  succeeds currently). 69% of the wait, zero benefit while broken.
+- 4.5s  the actual LLM call to first token, INCLUDING 30.5K-token prefill
+  (openrouter deepseek/deepseek-v4-flash, "API call #1 ... in=30491
+  latency=4.6s"). Prompt cache hit rate observed: 5%.
+Answers to the FG-1 hypotheses: the static prefix is NOT the driver
+(~4.5s total LLM leg at 30.5K); generation time is NOT the driver; the
+memory prefetch is. Model swap and prefix trim are secondary levers
+(~2-3s combined) until the 11s is gone.
+Two side findings needing their own follow-up: (1) a diagnostic turn
+measured input_tokens=175,006 — the prompt grew ~5.7x overnight from
+30.5K; if that persists, prefill DOES become dominant — investigate
+separately (CT115 config, not voice code). (2) Something respawns plain
+`hermes gateway run` every ~6.5s (steady "another instance running"
+error spam + a full CLI boot's CPU on the shared 4-core box); under
+concurrent gateway load a voice turn measured 59.4s to first delta —
+contention is a real multiplier.
+
+DEEPENED 2026-07-07 (A/B/E follow-up, still read-only):
+
+A — CONFIRMED and root-caused. Clean no-tool turn reproduced the split:
+11.0s of SILENT prologue (turn-start 17:09:49.282 -> API call 17:10:00.293,
+nothing logged between) then ~3s LLM to first token. py-spy pinned the 11s
+in plugins/memory/honcho prefetch thread.join. Mechanism: honcho.json sets
+recallMode "hybrid" + timeout unset, so prefetch_all() blocks on the
+first-turn dialectic join (8s) + follow-up join (3s) = 11.0s exactly, every
+fresh turn. WHY honcho never returns useful data: Honcho is SELF-HOSTED at
+http://192.168.0.222:8000 (NOT the hosted service — my earlier "hosted"
+label was wrong). The server is UP and healthy (/health 200, /docs 200,
+sub-3ms), storage/writes fine; it's the DIALECTIC (peer.chat, an LLM-
+reasoning call the Honcho box makes internally) that hangs to a 30s
+timeout. So: not an outage, not auth — the self-hosted Honcho's internal
+reasoning/LLM backend on .222 is the broken/slow piece. Predicted post-fix
+latency: ~1.5s init + ~3s LLM ~= 4.5-5s (measured LLM-only leg was ~2.9s),
+squarely in the 5-6s target. Fix is a one-line honcho.json change
+(recallMode "tools" -> prefetch returns "" with no blocking join, honcho
+tools still available; OR timeout: 2). CAVEAT: honcho.json is per-PROFILE
+(default), not per-voice-session — the voice service just calls /v1/runs,
+so this same change also speeds text chat's fresh turns (acceptable /
+desirable: the dialectic delivers nothing today).
+
+APPLIED + VERIFIED 2026-07-07 (Steve's go): set hosts.hermes.recallMode
+"hybrid" -> "tools" in /root/.hermes/honcho.json (backup
+honcho.json.bak-recallmode-20260707T172446Z). Measured on two live no-tool
+voice turns: first_delta 4.0s (cold) and 1.8s (warm) — vs the 13-16s
+baseline, beating the ~5s prediction. Log confirms the mechanism: the
+prologue gap collapsed from 11.0s to 17ms (turn-start 17:25:02.629 ->
+codex call 17:25:02.646); remaining latency is pure LLM. The .222 Honcho
+dialectic itself is still broken — see safety-notes.md SN-002 — but the
+voice path no longer BLOCKS on it. Option C (voice toolset trim) is the
+next lever if further reduction is wanted.
+
+B — RESOLVED, not a bug. The 175,006 tokens was NOT prompt growth: it was
+the SUM across a 7-call agentic tool loop in ONE turn ("what time is it"
+sent gpt-5.4 chasing execute_code -> web_search -> browser_navigate, all
+failing on this box). Per-call prompt is STABLE: fresh-turn first-call
+in= has held ~24-31K for 24h (time series: 30.8K, 30.5K, 30.0K, ... 24.3K
+today; the drop is the model/route change, not growth). Also found: the
+serving model changed since P1B from deepseek/deepseek-v4-flash (30.5K,
+5% cache) to gpt-5.4 via openai-codex (~24-30K, 99% cache) — prefill is now
+nearly free, which is WHY the 11s honcho block is an even larger share of
+the remaining latency. No context-accumulation bug. No action needed beyond
+the FG-1 note that voice prompts should avoid triggering tool loops for
+casual turns (a voice-specific system-prompt/toolset trim, already logged).
+
+E — RESOLVED, self-healed, benign. Source: the user systemd unit
+hermes-gateway.service (Restart=always, plain `hermes gateway run`, no
+--replace). It lost a startup race against an older gateway holding the
+lock (PID 102359) and Restart=always retried every RestartSec, spamming
+"another instance already running" — NRestarts reached 6508. It WON the
+race at 2026-07-07 01:27:57 (PID 151023) and has run stably since; last
+spam line 01:27:52, ZERO in the ~16h since (verified: 0 in last 5 min).
+Not a cron job, not a stray script, not an SN-001-style standing
+automation — a transient systemd restart storm that already resolved.
+No action needed; NRestarts=6508 is historical scar tissue. (Sidebar: the
+59.4s turn measured earlier was that fg1-diag tool-spree turn, not
+contention — B explains it.)
+
+**FG-1c: Voice-specific toolset/prompt trim (option C, still worth doing).**
+Deferred, not urgent. Original rationale: a trimmed voice profile cuts
+prefill and lifts prompt-cache hits (~2-3s). ADDED reason (B finding,
+2026-07-07): casual voice turns on the full toolset can wander into
+expensive multi-call agentic tool loops — a plain "what time is it" sent
+gpt-5.4 chasing execute_code -> web_search -> browser_navigate across 7
+API calls (~175K tokens, ~60s) before answering. A voice turn wants a
+narrow, conversational toolset (or a system-prompt bias against tool use
+for casual turns) so it answers directly. Do after FG-1's honcho fix
+settles; measure prompt-cache impact when picked up.
+
 **FG-2: Custom Optimus voice (separate from FG-1).**
 The original architecture doc parked "a private, local, non-distributed
 Optimus-inspired custom voice built from private-use samples" as future
@@ -1717,3 +1952,21 @@ directions (none scoped or chosen):
   environments (both already exist: PTT is always available, and
   shortening/zeroing the follow-up window approximates per-utterance
   waking).
+
+**FG-4: "Hey Optimus" local wake word (first-pass local model, 2026-07-08).**
+Implemented the local openWakeWord path requested by Steve: trained a custom
+`hey_optimus_v0.1.onnx` wake head on CT115 under
+`/opt/optimus-wake-training` using Piper-generated positive samples,
+controlled near-miss negatives, and real embedded noise windows. Wired the
+desktop wake engine to load `public/wake/hey_optimus_v0.1.onnx`, updated the
+UI hints from "Hey Jarvis" to "Hey Optimus", and added a matching
+`hey-optimus-16k.wav` model-in-the-loop fixture. Because this is synthetic
+first-pass training rather than a production dataset, the app threshold is
+intentionally stricter (`WAKE_THRESHOLD = 0.98`). Verification:
+`npm run test:ui -- src/app/voice/wake-pipeline.test.ts` passes with the real
+WASM pipeline (positive fixture wakes; deterministic noise stays silent);
+`npm run typecheck` passes; `npm run lint -- src/app/voice src/i18n` passes
+with only the pre-existing `model-settings.tsx` hook dependency warning.
+Follow-up for quality: collect Steve-spoken "Hey Optimus" positives and
+household/office negatives, retrain the same ONNX head, then lower/retune the
+threshold against real mic gates.

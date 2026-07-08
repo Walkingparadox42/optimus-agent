@@ -1116,9 +1116,17 @@ export const zh: Translations = {
     connFailed: '语音连接失败。',
     echoTest: '回声测试（不打断播放的采集）',
     alwaysOn: '常开（唤醒词）',
-    wakeHint: '说 "Hey Jarvis"',
+    wakeHint: '说 "Hey Optimus"',
     wakeLoading: '正在加载唤醒模型…',
     wakeFailed: '唤醒引擎加载失败。'
+  },
+  meetingPanel: {
+    record: '录制会议',
+    stop: '停止',
+    uploading: '正在上传…',
+    transcribing: '正在转录…',
+    saved: '已保存',
+    micDenied: '麦克风访问被拒绝。'
   },
   avatarPane: {
     title: '虚拟形象',
