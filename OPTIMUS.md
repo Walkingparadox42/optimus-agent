@@ -1949,6 +1949,41 @@ not recover generation; CT115 was restored to the older Qwen profile config,
 but CT120 Voicebox itself still needs a process/app restart if `/generate`
 continues returning 500.
 
+2026-07-10 follow-up: CT120 Voicebox recovered by a service restart (the
+500s were process-state corruption from a model swap). Steve verified
+chatterbox_turbo directly: clean audio, 2.5s for ~6.6s of speech (~2.6x
+realtime) on the RTX 3060, 4.8GB VRAM resident. CT115 repointed from the
+Qwen troubleshooting profile back to Chatterbox Turbo
+(OPTIMUS_VOICEBOX_PROFILE_ID=081fdf0f-c4ef-4b19-900c-5fa6d189661f,
+OPTIMUS_VOICEBOX_ENGINE=chatterbox_turbo) in the systemd drop-in
+/etc/systemd/system/optimus-voice-service.service.d/voicebox.conf (backup
+voicebox.conf.bak-qwen-<ts> alongside). Verified after restart:
+- smoke_test.py RESULT: ALL CHECKS PASSED, zero fallback lines in the
+  journal (all synthesis through Chatterbox).
+- Time-to-first-ANSWER-audio with the custom voice, measured over the WS
+  (probe kept at CT115 /tmp/ttfa_probe.py): 5.3s cold, 3.2-3.8s warm.
+  Breakdown: Hermes first-delta 3.8s cold / 1.8-2.4s warm (unchanged from
+  the Piper-era Honcho-fix baseline of 4.0/1.8) + ~1.4s Chatterbox
+  first-sentence synthesis. Piper's synthesis leg was ~0.1s, so the custom
+  voice costs ~1.3s extra TTFA per turn. Filler ack audio still lands at
+  ~1.0s (was ~0.05s under Piper; the ack itself is now Chatterbox too), so
+  audible dead air stays short.
+- Piper fallback regression-tested live: with OPTIMUS_VOICEBOX_URL pointed
+  at an unreachable port, the service boots (health-check failure is a
+  WARNING, not fatal), every synthesis logs "voicebox synth failed;
+  falling back to Piper", and turns still speak (TTFA 2.4-3.7s via Piper).
+  URL restored and re-verified on Chatterbox afterward.
+
+**KNOWN OPERATIONAL HAZARD (recorded per Steve, 2026-07-10): do not swap
+Voicebox engines on a live CT120 service.** The 2026-07-09 outage was
+process-state corruption from swapping engines in-process; unloading the
+model and clearing tasks did NOT recover it - only a service restart did.
+Rule: restart CT120's Voicebox between engine changes. Related caveat:
+CT115's fallback triggers on request FAILURE; a hung (not refused) CT120
+can stall a synthesis call up to OPTIMUS_VOICEBOX_TIMEOUT_S (currently
+90s) before Piper takes over - if Voicebox misbehaves, restart it rather
+than letting turns ride the timeout.
+
 **FG-3: In-window background-media false turns (the "addressing problem",
 observed live 2026-07-07).**
 During P1D-2 testing, always-on mode picked up YouTube audio as if it were
