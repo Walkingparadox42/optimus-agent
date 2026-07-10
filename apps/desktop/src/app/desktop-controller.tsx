@@ -206,7 +206,9 @@ export function DesktopController() {
   const terminalTakeover = useStore($terminalTakeover)
   const reviewOpen = useStore($reviewOpen)
   const fileBrowserOpen = useStore($fileBrowserOpen)
+  const avatarOpen = useStore($paneOpen(AVATAR_PANE_ID))
   const botVaultOpen = useStore($paneOpen(BOTVAULT_PANE_ID))
+  const browserOpen = useStore($paneOpen(BROWSER_PANE_ID))
   const previewPaneOpen = useStore($paneOpen(PREVIEW_PANE_ID))
   const panesFlipped = useStore($panesFlipped)
   const profileScope = useStore($profileScope)
@@ -1209,7 +1211,7 @@ export function DesktopController() {
       side={railSide}
       width={PREVIEW_RAIL_PANE_WIDTH}
     >
-      {chatOpen ? (
+      {chatOpen && previewPaneOpen ? (
         <ChatPreviewRail onRestartServer={restartPreviewServer} setTitlebarToolGroup={setTitlebarToolGroup} />
       ) : null}
     </Pane>
@@ -1236,11 +1238,13 @@ export function DesktopController() {
     >
       {/* Key on the project (cwd) so switching projects unmounts the old tree and
           mounts a fresh one straight into its skeleton — no stale-then-blip. */}
-      <RightSidebarPane
-        key={currentCwd || 'no-cwd'}
-        onActivateFile={path => composer.insertContextPathInlineRef(path)}
-        onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
-      />
+      {chatOpen && !workspaceMode && fileBrowserOpen ? (
+        <RightSidebarPane
+          key={currentCwd || 'no-cwd'}
+          onActivateFile={path => composer.insertContextPathInlineRef(path)}
+          onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
+        />
+      ) : null}
     </Pane>
   )
 
@@ -1289,17 +1293,19 @@ export function DesktopController() {
       side={railSide}
       width={FILE_BROWSER_DEFAULT_WIDTH}
     >
-      <BotVaultPane
-        onActivateFile={path => composer.insertContextPathInlineRef(path)}
-        onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
-      />
+      {chatOpen && workspaceMode && botVaultOpen ? (
+        <BotVaultPane
+          onActivateFile={path => composer.insertContextPathInlineRef(path)}
+          onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
+        />
+      ) : null}
     </Pane>
   )
 
   // [Optimus Cockpit] Browser viewport pane (Phase 6 step 1, human plane
   // only): a noVNC client into CT119's password-gated stack. Workspace-mode
-  // only. Children mount only in workspace mode so a hidden pane can never
-  // hold a live VNC socket in stock mode.
+  // only. Children mount only while the pane is open so closing it tears down
+  // the noVNC/RFB client instead of keeping a hidden browser session alive.
   const browserPane = (
     <Pane
       defaultOpen={false}
@@ -1312,7 +1318,7 @@ export function DesktopController() {
       side={railSide}
       width="36rem"
     >
-      {workspaceMode ? <BrowserPane /> : null}
+      {chatOpen && workspaceMode && browserOpen ? <BrowserPane /> : null}
     </Pane>
   )
 
@@ -1332,7 +1338,7 @@ export function DesktopController() {
       side={railSide}
       width="14rem"
     >
-      <AvatarPane />
+      {workspaceMode && avatarOpen ? <AvatarPane /> : null}
     </Pane>
   )
 

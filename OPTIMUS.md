@@ -1930,6 +1930,25 @@ either case behind the existing TTSEngine seam, the same swap pattern
 already proven by the espeak-ng -> Piper increment. Data-locality rule
 stands (ADR-0011 context): private audio samples never leave the LAN.
 
+2026-07-10 update: CT115's `optimus-voice-service` is now wired to the
+Voicebox `chatterbox_turbo` engine on CT120 (`192.168.0.120:17493`) using
+a Chatterbox-specific Optimus profile
+`081fdf0f-c4ef-4b19-900c-5fa6d189661f` ("Optimus Chatterbox Turbo").
+The profile was built from YouTube source `J139t-sM4ZA`, trimmed to an
+11.5s clean reference sentence ("I am Optimus Prime... among the stars.")
+and uploaded as a Voicebox cloned-voice sample. The `VoiceboxEngine`
+adapter now sends engine-aware payloads: Qwen/Tada keep their model-size
+fields, while Chatterbox/Chatterbox Turbo use the lean Voicebox request
+shape. Systemd drop-in backup/source backup created on CT115; service
+restarted healthy; `smoke_test.py` returned `RESULT: ALL CHECKS PASSED`.
+Live follow-up: after one successful Chatterbox response, Voicebox began
+returning HTTP 500 for `chatterbox_turbo`, causing CT115's configured Piper
+fallback to speak. Direct Voicebox tests confirmed the 500 was outside
+Hermes/desktop. Unloading `chatterbox-turbo` and clearing Voicebox tasks did
+not recover generation; CT115 was restored to the older Qwen profile config,
+but CT120 Voicebox itself still needs a process/app restart if `/generate`
+continues returning 500.
+
 **FG-3: In-window background-media false turns (the "addressing problem",
 observed live 2026-07-07).**
 During P1D-2 testing, always-on mode picked up YouTube audio as if it were

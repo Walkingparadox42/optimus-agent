@@ -812,6 +812,7 @@ export interface Translations {
     connect: string
     connecting: string
     disconnect: string
+    stop: string
     holdToTalk: string
     capturing: string
     thinking: string
@@ -829,6 +830,11 @@ export interface Translations {
     stop: string
     uploading: string
     transcribing: string
+    prompting: string
+    purposePrompt: string
+    purposePlaceholder: string
+    useContext: string
+    skipContext: string
     saved: string
     micDenied: string
   }

@@ -91,8 +91,8 @@ export class MeetingRecorder {
     $meetingPhase.set('recording')
   }
 
-  /** Stop, assemble the recording, upload for transcription. */
-  async stop(): Promise<void> {
+  /** Stop, collect meeting context, assemble the recording, upload for transcription. */
+  async stop(contextProvider?: () => Promise<null | string> | null | string): Promise<void> {
     const recorder = this.recorder
 
     if (!recorder || recorder.state === 'inactive') {
@@ -127,18 +127,29 @@ export class MeetingRecorder {
       return
     }
 
-    await this.upload(blob)
+    $meetingPhase.set('prompting')
+
+    let title = ''
+
+    try {
+      title = (await contextProvider?.())?.trim() ?? ''
+    } catch {
+      title = ''
+    }
+
+    await this.upload(blob, title)
   }
 
-  private async upload(blob: Blob): Promise<void> {
+  private async upload(blob: Blob, title: string): Promise<void> {
     $meetingPhase.set('uploading')
 
     const token = $voiceToken.get().trim()
     const url = new URL(transcribeUrl())
     url.searchParams.set('token', token)
-    // No title in M1 — the server timestamps the filename and falls back to a
-    // "meeting" slug. A meaningful title is an M2 concern (derive from the
-    // summary). Sending a timestamp here just doubled the date in the name.
+
+    if (title) {
+      url.searchParams.set('title', title)
+    }
 
     const form = new FormData()
     form.append('audio', blob, 'meeting.webm')

@@ -115,6 +115,13 @@ export class AlwaysOnController {
     $voiceWakeState.set('off')
   }
 
+  /** Manual user panic/stop control: close a false wake/listening window,
+   *  cancel any in-flight voice turn, then return to idle wake-word mode. */
+  stop(): void {
+    voiceClient.stop()
+    this.closeWindow()
+  }
+
   private onTapFrame(pcm: Int16Array): void {
     if (!this.enabled || voiceClient.pttHeld) {
       return // PTT override in progress — stay out of its way

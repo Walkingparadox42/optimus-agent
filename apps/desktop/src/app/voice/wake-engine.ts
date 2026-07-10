@@ -34,6 +34,7 @@ ort.env.wasm.numThreads = 1
 ort.env.wasm.proxy = false
 ort.env.wasm.wasmPaths = { mjs: ortWasmMjsUrl, wasm: ortWasmUrl }
 
+import { WakeGate } from './wake-gate'
 import { WAKE_THRESHOLD, type WakeModels, WakePipeline, type WakeTensor } from './wake-pipeline'
 
 const MODEL_BASE = `${import.meta.env.BASE_URL}wake/`
@@ -43,6 +44,7 @@ const EMBEDDING_MODEL_URL = `${MODEL_BASE}embedding_model.onnx`
 
 export class WakeEngine {
   private pipeline: null | WakePipeline = null
+  private gate = new WakeGate()
   /** Called once per detection (edge-triggered with a refractory period). */
   onWake: (() => void) | null = null
   private refractoryUntil = 0
@@ -78,17 +80,26 @@ export class WakeEngine {
       return
     }
 
+    this.gate.updateAudio(pcm)
+
     const score = await this.pipeline.process(pcm)
 
-    if (score !== null && score > WAKE_THRESHOLD && Date.now() >= this.refractoryUntil) {
+    if (
+      score !== null &&
+      score > WAKE_THRESHOLD &&
+      this.gate.acceptsWakeScore() &&
+      Date.now() >= this.refractoryUntil
+    ) {
       // 2s refractory so one utterance of the phrase fires exactly once.
       this.refractoryUntil = Date.now() + 2_000
       this.pipeline.reset()
+      this.gate.reset()
       this.onWake?.()
     }
   }
 
   reset(): void {
     this.pipeline?.reset()
+    this.gate.reset()
   }
 }

@@ -78,8 +78,10 @@ export function VoiceControls() {
       : phase === 'thinking'
         ? v.thinking
         : phase === 'speaking'
-          ? v.speaking
-          : v.holdToTalk
+        ? v.speaking
+        : v.holdToTalk
+
+  const showStop = phase !== 'idle' || wakeState === 'window'
 
   if (connection !== 'ready') {
     return (
@@ -117,18 +119,18 @@ export function VoiceControls() {
       <Button
         aria-label={v.holdToTalk}
         className={cn('w-full select-none', phase === 'capturing' && 'ring-2 ring-(--ui-accent)')}
-        onContextMenu={event => event.preventDefault()}
-        onPointerCancel={() => voiceClient.pttUp()}
-        onPointerDown={event => {
-          event.currentTarget.setPointerCapture(event.pointerId)
-          voiceClient.pttDown()
-        }}
-        onPointerUp={() => voiceClient.pttUp()}
+        disabled={phase === 'capturing'}
+        onClick={() => voiceClient.clickToTalk()}
         size="sm"
         variant="secondary"
       >
         {phaseLabel}
       </Button>
+      {showStop && (
+        <Button className="w-full" onClick={() => alwaysOn.stop()} size="sm" variant="destructive">
+          {v.stop}
+        </Button>
+      )}
       {transcript && (
         <p className="max-h-16 w-full overflow-hidden text-center text-[length:var(--conversation-caption-font-size)] text-(--ui-text-secondary)">
           {transcript}

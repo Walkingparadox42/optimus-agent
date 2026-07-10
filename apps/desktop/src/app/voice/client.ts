@@ -3,10 +3,10 @@
  *
  * The renderer owns the microphone (ADR-0013): this client speaks the
  * :9125 WS protocol directly (second socket alongside the tui_gateway
- * connection — it does not replace it). Push-to-talk defers D3: hold =
- * stream kind=1 mic frames, release = audio.input.commit; a press while
- * the assistant is audible is a barge-in (voice.interrupt carrying the
- * played-samples high-water mark, ADR-0006 steps 3-4).
+ * connection — it does not replace it). Manual click-to-talk streams kind=1
+ * mic frames until the service's silence endpoint commits the utterance; a
+ * click while the assistant is audible is a barge-in (voice.interrupt
+ * carrying the played-samples high-water mark, ADR-0006 steps 3-4).
  *
  * Epoch discipline (ADR-0005): the client tracks generation_epoch and
  * drops any delta or audio frame from an older epoch — the server already
@@ -46,6 +46,7 @@ export class VoiceClient {
   // P1D-2: true while the always-on controller streams an utterance
   // (VAD-opened, no PTT hold).
   private streamingUtterance = false
+  private clickTalking = false
   private turnDone = false
   // Set by a tts.filler announcement; cleared when that stream's last-chunk
   // flag arrives. Filler audio must not count toward played_samples.
@@ -117,8 +118,8 @@ export class VoiceClient {
   /** P1D-2: begin a VAD-opened utterance (no PTT). Frames are forwarded via
    *  feedUtteranceFrame; the SERVER ends the utterance (silence endpoint),
    *  signalled back by stt.final. */
-  startUtteranceStream(): boolean {
-    if (!this.connected || this.holding || this.busyWithTurn) {
+  startUtteranceStream({ allowBusy = false }: { allowBusy?: boolean } = {}): boolean {
+    if (!this.connected || this.holding || (!allowBusy && this.busyWithTurn)) {
       return false
     }
 
@@ -131,6 +132,26 @@ export class VoiceClient {
     setAvatarListening(true)
 
     return true
+  }
+
+  /** Manual click-to-talk: latch mic streaming on until the server silence
+   *  endpoint closes the utterance, or until the user presses Stop. */
+  clickToTalk(): void {
+    if (!this.connected || this.holding || this.streamingUtterance) {
+      return
+    }
+
+    if (this.playback.playing || this.busyWithTurn) {
+      this.bargeIn()
+    }
+
+    if (!this.startUtteranceStream({ allowBusy: true })) {
+      return
+    }
+
+    this.clickTalking = true
+    this.sendModeSet('listening_for_turn')
+    this.mic.start()
   }
 
   feedUtteranceFrame(pcm: Int16Array): void {
@@ -149,6 +170,32 @@ export class VoiceClient {
   /** Public barge-in for the always-on controller (voice-triggered). */
   interrupt(): void {
     this.bargeIn()
+  }
+
+  /** Manual stop from the avatar pane: cancel any live run/playback/capture
+   *  and return the client-side turn UI to idle without dropping the socket. */
+  stop(): void {
+    if (this.connected) {
+      this.bargeIn()
+    } else {
+      this.playback.flush()
+      this.setSpeakingIndicator(false)
+    }
+
+    if (this.holding) {
+      this.holding = false
+      this.mic.stop()
+    }
+
+    if (this.clickTalking) {
+      this.clickTalking = false
+      this.mic.stop()
+    }
+
+    this.streamingUtterance = false
+    this.turnDone = false
+    setAvatarListening(false)
+    this.setPhase('idle')
   }
 
   async connect(serverUrl: string, token: string): Promise<void> {
@@ -314,7 +361,7 @@ export class VoiceClient {
         this.playback.flush()
         this.setSpeakingIndicator(false)
 
-        if (!this.holding) {
+        if (!this.holding && !this.streamingUtterance) {
           this.setPhase('idle')
         }
 
@@ -337,6 +384,12 @@ export class VoiceClient {
         // A VAD-opened utterance ends when the SERVER endpoints it.
         if (this.streamingUtterance) {
           this.streamingUtterance = false
+
+          if (this.clickTalking) {
+            this.clickTalking = false
+            this.mic.stop()
+          }
+
           setAvatarListening(false)
           this.setPhase('thinking')
         }
@@ -420,6 +473,7 @@ export class VoiceClient {
   private teardownTurnState(): void {
     this.holding = false
     this.streamingUtterance = false
+    this.clickTalking = false
     this.turnDone = false
     this.incomingStreamIsFiller = false
     this.playback.flush()

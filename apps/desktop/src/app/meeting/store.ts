@@ -11,7 +11,7 @@
 
 import { atom } from 'nanostores'
 
-export type MeetingPhase = 'error' | 'idle' | 'recording' | 'transcribing' | 'uploading'
+export type MeetingPhase = 'error' | 'idle' | 'prompting' | 'recording' | 'transcribing' | 'uploading'
 
 export const $meetingPhase = atom<MeetingPhase>('idle')
 // Elapsed recording time in whole seconds (drives the MM:SS display).
