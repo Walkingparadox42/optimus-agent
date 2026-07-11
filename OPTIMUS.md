@@ -2243,3 +2243,139 @@ Note: this entry and the FG-5/6/7 entries above sit uncommitted alongside
 `apps/desktop/src/app/voice/always-on.ts` (another session's voice work,
 2026-07-10); the canvas code commit `a5699a9a4` deliberately includes only
 canvas files.
+
+---
+
+## VNC auto-login fix + BotVault live view / follow mode (2026-07-11)
+
+Two features + one confirmation, all in apps/desktop. No protected upstream
+files touched; canvas layout/panel system untouched.
+
+### 1. Browser pane VNC auto-login (fix, not new build)
+
+Most of the spec already existed (f46f14762): password in localStorage
+(`optimus.browser.vncPassword`, plaintext per decision), passed via the RFB
+constructor's `credentials: { password }` (never the interactive RFB prompt),
+cleared on `securityfailure` with fallback to the manual form, no retry loop.
+
+The actual bug behind "prompts every time": React StrictMode's dev
+mount/cleanup/mount cycle killed the auto-connect. The unmount cleanup
+disconnected the just-created RFB, and the once-per-mount guard
+(`autoConnectAttemptedRef`) then blocked the second attempt — the pane landed
+on the password form on every open under `npm run dev`. Fixed in
+`app/browser/index.tsx`:
+- Teardown now nulls `rfbRef` SYNCHRONOUSLY and resets the attempted flag, so
+  a remount auto-connects cleanly.
+- The async RFB `disconnect` listener is instance-guarded (a stale instance's
+  event can no longer clobber the connection that superseded it, or wrongly
+  clear stored credentials).
+Bridge-token auth for CT119 :9126 untouched (different credential, out of
+scope). No safeStorage (explicitly deferred).
+
+### 2. BotVault live view — push model, follow mode
+
+**Recon findings (required first):**
+- Tree reads: `readProjectDir` to `readDesktopDir` — in remote mode the
+  Electron bridge's REST (`/api/fs/list`) against the CT115 dashboard API.
+  Note content: `LocalFilePreview` via `readDesktopFileText` on
+  `/api/fs/read-text`. CT115 has the vault bind-mounted at
+  `/mnt/vaults/BotVault`; MCPO/CT117 is Hermes's own tool hop, not the
+  pane's read path.
+- Push channel ALREADY EXISTS: the tui_gateway WebSocket (`/api/ws`) this
+  window holds streams `tool.complete` events carrying the tool name AND
+  arguments; they already drive `$workspaceChangeTick`, which live-refreshes
+  the vault TREE. What was missing: path-level note events, open-note content
+  refresh, and follow mode.
+- Upstream preview update machinery: `LocalFilePreview` has a `reloadKey`
+  seam but it is manual-button only, and every re-read flashed the loader
+  (scroll loss). Checked, partially reusable: the `selfReload` internal
+  trigger was reused; quiet-reload behavior had to be added.
+- Event scoping (the decisive fact): each `/api/ws` connection is its own
+  gateway — the desktop receives events ONLY for sessions this window runs.
+  Background writers (cron, skills, the CT115 voice service) never reach this
+  channel. `/api/pub` + `/api/events` on the dashboard is a channel-id-scoped
+  PTY sidecar, not a global bus the desktop subscribes to.
+
+**What shipped (renderer, zero CT115 deployment needed):**
+- `store/vault-events.ts` — derives `{ path, timestamp, origin: 'session' }`
+  from `tool.complete` events: gated on the same may-mutate heuristic as the
+  workspace tick (read tools with `path` args never match), argument
+  extraction across `args`/`arguments`/`input` (+nested), vault-rooted paths
+  only. Two streams per the spec's timing rule: `$vaultNoteActivity`
+  (leading edge — auto-open fires on the FIRST event) and
+  `$vaultNoteRefresh` (per-path 400ms trailing debounce — re-fetches
+  coalesce). Unit-tested (`vault-events.test.ts`).
+- Ladder hookup: two lines in the existing `tool.complete` branch of
+  `gateway-event.ts` (not a protected file), beside `notifyWorkspaceChanged`.
+- Open-note live refresh: `LocalFilePreview` subscribes to the debounced
+  stream; a matching path re-reads via the existing `selfReload` trigger
+  (view mode + edit state untouched). Same-path re-reads are now QUIET: last
+  content stays up, text swaps in place — no loader flash, no unmount, scroll
+  preserved (a note growing at the bottom never yanks the user down). A
+  failed background re-read keeps last-good content (no user-facing error);
+  first loads keep the loader/error behavior byte-for-byte. Editing stays
+  safe: the editor owns its buffer and the stale-on-disk save guard already
+  covered concurrent writes.
+- FOLLOW MODE (default ON, persisted `optimus.vault.followMode`): a
+  session-origin event for a note NOT currently open summons the vault
+  surface (workspace mode: `setBotVaultPaneOpen` + preview pane open; canvas
+  mode: `summonPanel('botvault')`), reveals the note in the tree via the
+  previously dormant `$revealInTreeRequest` seam (it self-consumes on the
+  next mounted tree, so it works mid-summon), and opens the note through the
+  same preview path a manual tree click takes. Toggle on the pane header
+  (broadcast icon, aria-pressed, always visible). Off = live-update the open
+  note only. Origin is threaded through everywhere; only `'session'` may
+  auto-summon, so a future background feed can never summon over the user.
+- Degradation is structural: gateway down means no events, and the pane
+  behaves exactly as before this feature. Manual refresh stays.
+
+**Hermes-side emit (the separately documented piece): NOTHING TO DEPLOY for
+session-origin.** Hermes already emits the needed event — `tool.complete`
+with arguments over the pane's existing socket — and the renderer derives
+note-changed from it. Payload equivalent: `{ path, timestamp }` + derived
+`origin: 'session'`.
+
+**FLAGGED (per the flag-before-building rule): background-origin coverage.**
+Cron/skill/voice-service writes stream to no channel this window can see.
+Covering them requires either (a) extending the tui_gateway/dashboard event
+surface — explicitly a raise-first decision per CLAUDE.md, not done — or
+(b) new push infrastructure (e.g. a CT115-side inotify sidecar on the vault
+mount pushing over a new WS). Shipped without it: background writes update
+the panel via the existing behavior (tree tick when applicable / manual
+refresh), never auto-summon. Steve decides if/how to close this gap.
+
+**Also flagged:** in canvas mode the summoned note preview lands in the
+covered docked rail (known canvas Phase 1 quirk — preview is not a canvas
+panel yet). Follow mode in canvas summons the BotVault panel + reveals the
+note in its tree; the note CONTENT becomes visible when the preview joins
+canvas in Phase 2. Workspace mode delivers the full spec behavior today.
+
+### 3. Browser-pane MCP action (confirmation, no build)
+
+Confirmed stable + documented (Phase 6 steps 2-4, this file): MCP server
+`optimus-browser` (StreamableHTTP `http://192.168.0.119:9126/mcp`, bearer
+token from CT119 `/etc/optimus/bridge-token`), action name **`navigate`**,
+parameter **`url`**. Agent-visible tool names: navigate / page_info /
+observe / click / type_text / press.
+
+Two caveats for the voice-trigger work:
+- `navigate` is a WRITE verb behind the step-4 owner-approval gate: every
+  call blocks up to 30s and default-DENIES unless approved (curl on CT119).
+  A voice trigger will feel broken unless the gate is approved fast, relaxed
+  for `navigate`, or given a UI. Decide before wiring voice to it.
+- `navigate` drives the SHARED browser the pane views — it does NOT open the
+  cockpit's browser panel UI. No MCP/agent action exists to summon the pane
+  itself (the agent-GUI action channel was never built). If voice needs
+  "open the browser pane" as a UI action, that's a missing piece — flagged.
+
+### Verification
+
+typecheck clean; eslint clean on touched files; `vite build` clean; vitest
+matches the established baseline exactly (21 pre-existing failures — incl.
+the preview-registry persistence-shape and panes width-override assertions —
+plus the two known parallel-run flakes, messaging/skills, which pass in
+isolation). New vault-events tests pass. Files touched:
+`app/browser/index.tsx`, `store/vault-events.ts` (+test),
+`app/session/hooks/use-message-stream/gateway-event.ts` (2-line hookup),
+`app/chat/right-rail/preview-file.tsx` (quiet reload + live subscription),
+`app/botvault/index.tsx` (follow toggle), i18n x5.

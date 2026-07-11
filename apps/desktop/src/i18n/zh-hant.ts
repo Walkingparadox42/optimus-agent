@@ -900,7 +900,10 @@ export const zhHant = defineLocale({
     aria: 'BotVault',
     title: 'BotVault',
     emptyTitle: '保險庫是空的',
-    emptyBody: '保險庫中還沒有檔案。'
+    emptyBody: '保險庫中還沒有檔案。',
+    followMode: '跟隨保險庫寫入',
+    followModeOn: '跟隨已開啟 — 寫入的筆記會自動在此開啟',
+    followModeOff: '跟隨已關閉 — 僅即時更新已開啟的筆記'
   },
   canvas: {
     dockAria: '畫布程式塢',

@@ -83,11 +83,20 @@ export function BrowserPane() {
       })
 
       rfb.addEventListener('disconnect', event => {
+        // A torn-down instance (teardown nulls the ref synchronously, or a
+        // newer RFB has replaced it) must not touch live state — otherwise a
+        // stale disconnect clobbers the connection that superseded it.
+        if (rfbRef.current !== rfb) {
+          return
+        }
+
         const clean = Boolean((event as CustomEvent<{ clean?: boolean }>).detail?.clean)
         rfbRef.current = null
         setPhase('idle')
 
         if (authFailedRef.current) {
+          // Server rejected the stored password: forget it and fall back to
+          // the manual prompt (no silent retry loop).
           localStorage.removeItem(VNC_PASSWORD_STORAGE_KEY)
           setPassword('')
           setError(b.authFailed)
@@ -116,8 +125,20 @@ export function BrowserPane() {
     connectWithPassword(password)
   }, [connectWithPassword, password])
 
-  // Unmount (workspace mode off / app teardown) → drop the socket.
-  useEffect(() => () => rfbRef.current?.disconnect(), [])
+  // Unmount (pane dismissed / app teardown) → drop the socket. The ref is
+  // nulled SYNCHRONOUSLY (the RFB 'disconnect' event is async) and the
+  // attempted flag reset, so a remount — including StrictMode's dev
+  // mount→cleanup→mount cycle, which used to kill the auto-connect and land
+  // on the password form every open — starts clean and auto-connects again.
+  useEffect(
+    () => () => {
+      const rfb = rfbRef.current
+      rfbRef.current = null
+      autoConnectAttemptedRef.current = false
+      rfb?.disconnect()
+    },
+    []
+  )
 
   return (
     <aside

@@ -39,6 +39,7 @@ import {
 import { clearSessionSubagents, pruneDelegateFallbackSubagents, upsertSubagent } from '@/store/subagents'
 import { clearActiveSessionTodos } from '@/store/todos'
 import { recordToolDiff } from '@/store/tool-diffs'
+import { notifyVaultNoteChanged, vaultPathFromToolPayload } from '@/store/vault-events'
 import { notifyWorkspaceChanged, toolMayMutateFiles } from '@/store/workspace-events'
 import type { RpcEvent } from '@/types/hermes'
 
@@ -395,6 +396,15 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         // polled: fires exactly when the agent touches the tree.
         if (payload && toolMayMutateFiles(payload)) {
           notifyWorkspaceChanged()
+
+          // [Optimus Cockpit] BotVault live view: a write whose args point
+          // under the vault root becomes a note-changed event (path-level,
+          // session-origin) driving the open-note refresh + follow mode.
+          const vaultPath = vaultPathFromToolPayload(payload)
+
+          if (vaultPath) {
+            notifyVaultNoteChanged(vaultPath, 'session')
+          }
         }
       } else if (SUBAGENT_EVENT_TYPES.has(event.type)) {
         if (sessionId && payload && !sessionInterrupted(sessionId)) {

@@ -1092,7 +1092,10 @@ export const zh: Translations = {
     aria: 'BotVault',
     title: 'BotVault',
     emptyTitle: '保险库为空',
-    emptyBody: '保险库中还没有文件。'
+    emptyBody: '保险库中还没有文件。',
+    followMode: '跟随保险库写入',
+    followModeOn: '跟随已开启 — 写入的笔记会自动在此打开',
+    followModeOff: '跟随已关闭 — 仅实时更新已打开的笔记'
   },
   canvas: {
     dockAria: '画布程序坞',

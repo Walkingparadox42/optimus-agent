@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { $panesFlipped } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import { setCurrentSessionPreviewTarget } from '@/store/preview'
+import { $vaultFollowMode, toggleVaultFollowMode } from '@/store/vault-events'
 
 import { EmptyState, RightSidebarSectionHeader } from '../right-sidebar'
 import { ProjectTree } from '../right-sidebar/files/tree'
@@ -45,6 +46,7 @@ export function BotVaultPane({ onActivateFile, onActivateFolder }: BotVaultPaneP
   const r = t.rightSidebar
   const v = t.botvault
   const panesFlipped = useStore($panesFlipped)
+  const followMode = useStore($vaultFollowMode)
 
   const {
     collapseAll,
@@ -90,6 +92,23 @@ export function BotVaultPane({ onActivateFile, onActivateFolder }: BotVaultPaneP
           <div className="flex min-w-0 flex-1">
             <SidebarPanelLabel>{v.title}</SidebarPanelLabel>
           </div>
+          {/* Follow mode (default on): session-origin vault writes summon this
+              pane and open the written note; off = live-update the open note
+              only. Always visible — it's a mode, not a hover action. */}
+          <Button
+            aria-label={v.followMode}
+            aria-pressed={followMode}
+            className={cn(
+              HEADER_ACTION_CLASS,
+              followMode ? 'text-sidebar-accent-foreground' : 'text-sidebar-foreground/45'
+            )}
+            onClick={toggleVaultFollowMode}
+            size="icon-xs"
+            title={followMode ? v.followModeOn : v.followModeOff}
+            variant="ghost"
+          >
+            <Codicon name="broadcast" size="0.8125rem" />
+          </Button>
           <Button
             aria-label={r.refreshTree}
             className={HEADER_ACTION_LABEL_REVEAL}

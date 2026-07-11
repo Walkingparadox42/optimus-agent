@@ -930,7 +930,10 @@ export const ja = defineLocale({
     aria: 'BotVault',
     title: 'BotVault',
     emptyTitle: 'ボルトは空です',
-    emptyBody: 'ボルトにはまだファイルがありません。'
+    emptyBody: 'ボルトにはまだファイルがありません。',
+    followMode: 'ボルトへの書き込みをフォロー',
+    followModeOn: 'フォロー中 — 書き込まれたノートを自動的に開きます',
+    followModeOff: 'フォロー停止中 — 開いているノートのみライブ更新します'
   },
   canvas: {
     dockAria: 'キャンバスドック',

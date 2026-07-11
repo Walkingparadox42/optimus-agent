@@ -912,7 +912,10 @@ export const en: Translations = {
     aria: 'BotVault',
     title: 'BotVault',
     emptyTitle: 'Vault is empty',
-    emptyBody: 'No files in the vault yet.'
+    emptyBody: 'No files in the vault yet.',
+    followMode: 'Follow live vault writes',
+    followModeOn: 'Follow mode on — vault writes open here automatically',
+    followModeOff: 'Follow mode off — only the open note live-updates'
   },
   canvas: {
     dockAria: 'Canvas dock',

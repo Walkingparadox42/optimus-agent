@@ -1,3 +1,4 @@
+import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import type {
   ComponentProps,
@@ -32,6 +33,7 @@ import { cn } from '@/lib/utils'
 import type { PreviewTarget } from '@/store/preview'
 import { setPreviewDirty } from '@/store/preview-edit'
 import { $currentCwd } from '@/store/session'
+import { $vaultNoteRefresh } from '@/store/vault-events'
 import { notifyWorkspaceChanged } from '@/store/workspace-events'
 
 const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
@@ -578,8 +580,26 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
   // hover flag (no state — only the keydown handler reads it).
   const readViewRef = useRef<HTMLDivElement>(null)
   const hoverRef = useRef(false)
+  // Path whose content is currently on screen. A re-read of the SAME path (live
+  // vault refresh, post-save reload) keeps the rendered content up and swaps
+  // text in place — no loader flash, no unmount, scroll preserved. A different
+  // path still shows the loader as before.
+  const loadedPathRef = useRef<null | string>(null)
   const filePath = filePathForTarget(target)
   const isImage = target.previewKind === 'image'
+
+  // [Optimus Cockpit] BotVault live view: Hermes wrote the note that's open
+  // here (debounced note-changed event, see store/vault-events) — re-read it.
+  // Rides `selfReload`, the same trigger a post-save reload uses, so view mode
+  // and edit state are untouched. Editing is safe: the editor owns its buffer
+  // and the stale-on-disk guard still runs at save time.
+  const liveRefresh = useStore($vaultNoteRefresh)
+
+  useEffect(() => {
+    if (liveRefresh && liveRefresh.path === filePath) {
+      setSelfReload(n => n + 1)
+    }
+  }, [filePath, liveRefresh])
 
   useEffect(() => {
     setUserMode(null)
@@ -615,7 +635,12 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
         return
       }
 
-      setState({ loading: true })
+      // Same-path re-read (live vault refresh, post-save reload, manual reload)
+      // keeps the current content on screen while the new text is fetched —
+      // swapping in place preserves scroll and never flashes the loader. First
+      // load of a path behaves exactly as before.
+      const quiet = loadedPathRef.current === filePath
+      setState(prev => (quiet && (prev.text !== undefined || prev.dataUrl) ? prev : { loading: true }))
 
       try {
         if (isImage) {
@@ -624,6 +649,7 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
           const dataUrl = target.dataUrl || (await readDesktopFileDataUrl(filePath))
 
           if (active) {
+            loadedPathRef.current = filePath
             setState({ dataUrl, loading: false })
           }
 
@@ -635,6 +661,7 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
         if (active) {
           const shouldBlock = !forcePreview && (result.binary || (result.byteSize ?? 0) > TEXT_PREVIEW_MAX_BYTES)
 
+          loadedPathRef.current = filePath
           setState({
             binary: result.binary,
             byteSize: result.byteSize,
@@ -662,10 +689,17 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
         }
       } catch (error) {
         if (active) {
-          setState({
-            error: error instanceof Error ? error.message : String(error),
-            loading: false
-          })
+          // A failed SAME-PATH re-read (transient gateway blip mid live
+          // refresh) keeps the last-good content — no user-facing error for a
+          // background refresh. First loads still surface the error state.
+          setState(prev =>
+            quiet && (prev.text !== undefined || prev.dataUrl)
+              ? prev
+              : {
+                  error: error instanceof Error ? error.message : String(error),
+                  loading: false
+                }
+          )
         }
       }
     }

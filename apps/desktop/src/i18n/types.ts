@@ -797,6 +797,9 @@ export interface Translations {
     title: string
     emptyTitle: string
     emptyBody: string
+    followMode: string
+    followModeOn: string
+    followModeOff: string
   }
   canvas: {
     dockAria: string
