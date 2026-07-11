@@ -35,12 +35,12 @@ interface PanelSpec {
   dy: number
 }
 
-// Chat and browser need room; BotVault is a narrow tree column. Chat sits
-// left-of-center as the spine, browser right, vault between.
+// Chat and browser need room; BotVault now carries a live note preview in
+// canvas mode, so it gets enough width to split tree + content when possible.
 const SPECS: Record<CanvasPanelId, PanelSpec> = {
-  chat: { weight: 42, minW: 360, maxW: 880, vh: 1, dy: 0 },
-  botvault: { weight: 18, minW: 236, maxW: 380, vh: 0.72, dy: 0.42 },
-  browser: { weight: 40, minW: 380, maxW: 1240, vh: 0.9, dy: 0.16 }
+  chat: { weight: 36, minW: 360, maxW: 820, vh: 1, dy: 0 },
+  botvault: { weight: 28, minW: 380, maxW: 620, vh: 0.78, dy: 0.34 },
+  browser: { weight: 36, minW: 380, maxW: 1180, vh: 0.9, dy: 0.16 }
 }
 
 const ORDER: readonly CanvasPanelId[] = ['chat', 'botvault', 'browser']

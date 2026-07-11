@@ -52,9 +52,9 @@ const PANEL_ICONS: Record<CanvasPanelId, string> = {
   chat: 'comment-discussion'
 }
 
-// Minimum sizes per content (chat/browser need real room; the vault is a tree).
+// Minimum sizes per content (BotVault is tree + live note preview in canvas).
 const PANEL_MIN: Record<CanvasPanelId, { w: number; h: number }> = {
-  botvault: { w: 220, h: 240 },
+  botvault: { w: 380, h: 300 },
   browser: { w: 360, h: 280 },
   chat: { w: 340, h: 320 }
 }
@@ -152,6 +152,7 @@ export function CanvasLayer() {
       case 'botvault':
         return (
           <BotVaultPane
+            canvasLivePreview
             onActivateFile={path => insertVaultRef(path, false)}
             onActivateFolder={path => insertVaultRef(path, true)}
           />

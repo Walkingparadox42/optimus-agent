@@ -2379,3 +2379,79 @@ isolation). New vault-events tests pass. Files touched:
 `app/session/hooks/use-message-stream/gateway-event.ts` (2-line hookup),
 `app/chat/right-rail/preview-file.tsx` (quiet reload + live subscription),
 `app/botvault/index.tsx` (follow toggle), i18n x5.
+
+## 2026-07-11 - Canvas BotVault live preview + pane-command recon
+
+### 1. BotVault canvas live preview
+
+Phase 2 preview gap closed in `apps/desktop/` without touching the six
+protected upstream shell/layout files. Canvas BotVault now renders a live
+note preview inside the floating BotVault panel itself:
+- `app/botvault/index.tsx` adds `canvasLivePreview`, reads the existing
+  `$filePreviewTarget`, filters it to `/mnt/vaults/BotVault`, and renders
+  `LocalFilePreview` beside/below the tree.
+- It deliberately reuses the existing BotVault preview path:
+  `previewFile()` / follow mode still call `setCurrentSessionPreviewTarget`.
+  No duplicate note store, no duplicate watcher.
+- Quiet in-place re-read and scroll preservation are inherited from the
+  existing `LocalFilePreview` + `$vaultNoteRefresh` work. Session-origin
+  note-changed events still auto-summon `botvault`, reveal the note in the
+  tree, and now show the note content in canvas instead of the hidden docked
+  preview rail.
+- `app/canvas/layer.tsx` passes `canvasLivePreview`; `auto-arrange.ts`
+  gives BotVault more default width/height so tree + note can coexist.
+
+### 2. Agent-controlled pane open/close recon + renderer contract
+
+Recon result: the running desktop renderer already receives Hermes gateway
+events over `/api/ws`, and the older dashboard has a channel-scoped
+`/api/pub` -> `/api/events` fanout. There is no existing app-level
+"MCP-to-renderer command bus" in `apps/desktop`, and the CT119 browser MCP
+(`optimus-browser`) owns browser navigation only; it does not summon Cockpit
+panes.
+
+Lowest-friction renderer contract shipped:
+- Stable MCP/tool name documented in code: `optimus_cockpit_panel`.
+- Supported payload shape:
+  `{ action: 'open' | 'close' | 'toggle', panel: 'chat' | 'botvault' | 'browser', url?: string }`.
+- `app/canvas/agent-panel-command.ts` parses both a direct renderer event
+  type (`optimus.ui.command`) and a `tool.start` event whose `name` is
+  `optimus_cockpit_panel`. It applies the action once on `tool.start`, so
+  `toggle` cannot double-flip on `tool.complete`.
+- `open` and `toggle` enable canvas mode and summon/toggle the requested
+  panel. `close` dismisses the panel. UI state is always allowed.
+
+Important limit: `url` is preserved/recognized for browser opens, but desktop
+does not own CT119 navigation. A real MCP implementation should either live
+beside `optimus-browser` or call it, then emit `optimus_cockpit_panel` so one
+agent call both summons the browser panel and navigates the shared browser.
+The CT119 navigate approval gate remains separate.
+
+### 3. Voice mirror recon (not built)
+
+The CT115 voice socket already carries text inside the renderer voice path:
+`VoiceClient` sees `stt.final` and accumulates `agent.text.delta` into
+`$voiceTranscript` / `$voiceAnswer`. That text is not currently bridged onto
+the Hermes `/api/ws` event stream or the chat message store. Mirroring avatar
+voice turns into Chat would require modifying the renderer voice path
+(`voice/client.ts` or `voice/always-on.ts`) or adding a new bridge around it.
+Per the request's flag-before-building rule, no voice-mirror implementation
+was done.
+
+### Verification
+
+- `npm run typecheck` clean.
+- `npm run lint` clean except the pre-existing warning in
+  `src/app/settings/model-settings.tsx:412` (`setConfig` dependency).
+- Focused Vitest: `npm.cmd run test:ui -- --run
+  src/app/canvas/agent-panel-command.test.ts src/app/canvas/auto-arrange.test.ts`
+  passed (2 files, 11 tests).
+- Full `npm.cmd run test:ui` after build reported the expected 23 failed
+  tests (21 known baseline + 2 known messaging/skills flakes). It also
+  collected 40 failed suites from `.cjs` node-test files and staged
+  `build/native-deps/node-pty/*.test.js` files; those are runner/include
+  artifacts from running the broad Vitest command after `npm run build`, not
+  new canvas failures.
+- `npm run build` passed. Build emitted the existing dirty-tree warning,
+  CSS optimizer warning, large `@tabler/icons-react` barrel warning, and
+  large chunk warning.

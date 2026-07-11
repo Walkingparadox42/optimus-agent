@@ -10,9 +10,10 @@ import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { cn } from '@/lib/utils'
 import { $panesFlipped } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
-import { setCurrentSessionPreviewTarget } from '@/store/preview'
+import { $filePreviewTarget, type PreviewTarget, setCurrentSessionPreviewTarget } from '@/store/preview'
 import { $vaultFollowMode, toggleVaultFollowMode } from '@/store/vault-events'
 
+import { LocalFilePreview, PreviewEmptyState } from '../chat/right-rail/preview-file'
 import { EmptyState, RightSidebarSectionHeader } from '../right-sidebar'
 import { ProjectTree } from '../right-sidebar/files/tree'
 import { SidebarPanelLabel } from '../shell/sidebar-label'
@@ -31,6 +32,7 @@ import { BOTVAULT_PATH, useVaultTree } from './use-vault-tree'
  */
 
 interface BotVaultPaneProps {
+  canvasLivePreview?: boolean
   onActivateFile: (path: string) => void
   onActivateFolder: (path: string) => void
 }
@@ -41,12 +43,28 @@ const HEADER_ACTION_CLASS =
 
 const HEADER_ACTION_LABEL_REVEAL = `${HEADER_ACTION_CLASS} pointer-events-none opacity-0 transition-opacity focus-visible:pointer-events-auto focus-visible:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100`
 
-export function BotVaultPane({ onActivateFile, onActivateFolder }: BotVaultPaneProps) {
+function targetPath(target: PreviewTarget): string {
+  return target.path || target.source || target.url
+}
+
+function isVaultPreviewTarget(target: PreviewTarget | null): target is PreviewTarget {
+  if (!target || target.kind !== 'file') {
+    return false
+  }
+
+  const path = targetPath(target).replaceAll('\\', '/')
+
+  return path === BOTVAULT_PATH || path.startsWith(`${BOTVAULT_PATH}/`)
+}
+
+export function BotVaultPane({ canvasLivePreview = false, onActivateFile, onActivateFolder }: BotVaultPaneProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
   const v = t.botvault
   const panesFlipped = useStore($panesFlipped)
   const followMode = useStore($vaultFollowMode)
+  const activeFilePreview = useStore($filePreviewTarget)
+  const canvasPreviewTarget = isVaultPreviewTarget(activeFilePreview) ? activeFilePreview : null
 
   const {
     collapseAll,
@@ -133,56 +151,83 @@ export function BotVaultPane({ onActivateFile, onActivateFolder }: BotVaultPaneP
           </Button>
         </RightSidebarSectionHeader>
 
-        {rootError ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
-            <EmptyState body={r.unreadableBody(rootError)} title={r.unreadableTitle} />
-            <button
-              className="text-[0.68rem] font-medium text-muted-foreground transition hover:text-foreground"
-              onClick={() => void refreshRoot()}
-              type="button"
-            >
-              {r.tryAgain}
-            </button>
-          </div>
-        ) : rootLoading && data.length === 0 ? (
-          showSkeleton ? (
-            <div aria-label={r.loadingTree} className="min-h-0 flex-1" role="status">
-              <TreeSkeleton />
-            </div>
-          ) : (
-            <div className="min-h-0 flex-1" />
-          )
-        ) : data.length === 0 ? (
-          <EmptyState body={v.emptyBody} title={v.emptyTitle} />
-        ) : (
-          <ErrorBoundary
-            fallback={({ reset }) => (
+        <div
+          className={cn(
+            'flex min-h-0 flex-1',
+            canvasLivePreview ? 'flex-col min-[44rem]:flex-row' : 'flex-col'
+          )}
+        >
+          <div
+            className={cn(
+              'flex min-h-0 min-w-0 flex-col',
+              canvasLivePreview ? 'h-[45%] min-[44rem]:h-auto min-[44rem]:w-[42%] min-[44rem]:min-w-52' : 'flex-1'
+            )}
+          >
+            {rootError ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
-                <EmptyState body={r.treeErrorBody} title={r.treeErrorTitle} />
+                <EmptyState body={r.unreadableBody(rootError)} title={r.unreadableTitle} />
                 <button
                   className="text-[0.68rem] font-medium text-muted-foreground transition hover:text-foreground"
-                  onClick={reset}
+                  onClick={() => void refreshRoot()}
                   type="button"
                 >
                   {r.tryAgain}
                 </button>
               </div>
+            ) : rootLoading && data.length === 0 ? (
+              showSkeleton ? (
+                <div aria-label={r.loadingTree} className="min-h-0 flex-1" role="status">
+                  <TreeSkeleton />
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1" />
+              )
+            ) : data.length === 0 ? (
+              <EmptyState body={v.emptyBody} title={v.emptyTitle} />
+            ) : (
+              <ErrorBoundary
+                fallback={({ reset }) => (
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+                    <EmptyState body={r.treeErrorBody} title={r.treeErrorTitle} />
+                    <button
+                      className="text-[0.68rem] font-medium text-muted-foreground transition hover:text-foreground"
+                      onClick={reset}
+                      type="button"
+                    >
+                      {r.tryAgain}
+                    </button>
+                  </div>
+                )}
+                label="botvault-tree"
+              >
+                <ProjectTree
+                  collapseNonce={collapseNonce}
+                  cwd={BOTVAULT_PATH}
+                  data={data}
+                  onActivateFile={onActivateFile}
+                  onActivateFolder={onActivateFolder}
+                  onLoadChildren={loadChildren}
+                  onNodeOpenChange={setNodeOpen}
+                  onPreviewFile={previewFile}
+                  openState={openState}
+                />
+              </ErrorBoundary>
             )}
-            label="botvault-tree"
-          >
-            <ProjectTree
-              collapseNonce={collapseNonce}
-              cwd={BOTVAULT_PATH}
-              data={data}
-              onActivateFile={onActivateFile}
-              onActivateFolder={onActivateFolder}
-              onLoadChildren={loadChildren}
-              onNodeOpenChange={setNodeOpen}
-              onPreviewFile={previewFile}
-              openState={openState}
-            />
-          </ErrorBoundary>
-        )}
+          </div>
+
+          {canvasLivePreview && (
+            <div className="relative min-h-0 min-w-0 flex-1 border-t border-(--ui-stroke-secondary) bg-background/60 min-[44rem]:border-l min-[44rem]:border-t-0">
+              {canvasPreviewTarget ? (
+                <LocalFilePreview reloadKey={0} target={canvasPreviewTarget} />
+              ) : (
+                <PreviewEmptyState
+                  body="Select a BotVault note or leave follow mode on while Optimus writes."
+                  title="No BotVault note selected"
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   )

@@ -1,6 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { type MutableRefObject, useCallback } from 'react'
 
+import {
+  applyOptimusCockpitPanelCommand,
+  OPTIMUS_UI_COMMAND_EVENT,
+  parseOptimusCockpitPanelCommand
+} from '@/app/canvas/agent-panel-command'
 import { writeAgentTerminalChunk } from '@/app/right-sidebar/terminal/agent-terminal-stream'
 import { readActiveTerminal } from '@/app/right-sidebar/terminal/buffer'
 import { closeAgentTerminalByProc } from '@/app/right-sidebar/terminal/terminals'
@@ -96,6 +101,19 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
     (event: RpcEvent) => {
       const payload = event.payload as GatewayEventPayload | undefined
       const explicitSid = event.session_id || ''
+
+      const panelCommand =
+        event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.start'
+          ? parseOptimusCockpitPanelCommand(event.type, payload)
+          : null
+
+      if (panelCommand) {
+        applyOptimusCockpitPanelCommand(panelCommand)
+
+        if (event.type === OPTIMUS_UI_COMMAND_EVENT) {
+          return
+        }
+      }
 
       if (!explicitSid && gatewayEventRequiresSessionId(event.type)) {
         return
