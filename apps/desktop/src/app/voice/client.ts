@@ -20,6 +20,14 @@
 import { setAvatarListening } from '@/store/avatar'
 import { setVoicePlaybackState } from '@/store/voice-playback'
 
+import { applyOptimusCockpitPanelCommand, parseOptimusCockpitPanelCommand } from '../canvas/agent-panel-command'
+
+import {
+  finalizeVoiceAssistant,
+  mirrorVoiceAssistantDelta,
+  mirrorVoiceUserTranscript,
+  resetVoiceChatMirror
+} from './chat-mirror'
 import { MicCapture } from './mic'
 import { VoicePlaybackQueue } from './playback'
 import { FLAG_LAST, KIND_MIC, KIND_TTS, packFrame, parseFrame, type ServerMessage } from './protocol'
@@ -128,6 +136,7 @@ export class VoiceClient {
     this.turnDone = false
     $voiceTranscript.set('')
     $voiceAnswer.set('')
+    resetVoiceChatMirror()
     this.setPhase('capturing')
     setAvatarListening(true)
 
@@ -333,6 +342,7 @@ export class VoiceClient {
         }
 
         $voiceAnswer.set($voiceAnswer.get() + String(message.text ?? ''))
+        mirrorVoiceAssistantDelta(String(message.text ?? ''), message.turn_id)
 
         break
       }
@@ -352,6 +362,7 @@ export class VoiceClient {
         }
 
         this.emit('response.done', message)
+        finalizeVoiceAssistant()
 
         break
       }
@@ -366,6 +377,7 @@ export class VoiceClient {
         }
 
         this.emit('response.interrupted', message)
+        resetVoiceChatMirror()
 
         break
       }
@@ -380,6 +392,7 @@ export class VoiceClient {
 
       case 'stt.final': {
         $voiceTranscript.set(String(message.text ?? ''))
+        mirrorVoiceUserTranscript(String(message.text ?? ''), message.turn_id)
 
         // A VAD-opened utterance ends when the SERVER endpoints it.
         if (this.streamingUtterance) {
@@ -401,6 +414,17 @@ export class VoiceClient {
 
       case 'stt.partial': {
         $voiceTranscript.set(String(message.text ?? ''))
+
+        break
+      }
+
+      case 'tool.result':
+      case 'tool.started': {
+        const command = parseOptimusCockpitPanelCommand('tool.start', message)
+
+        if (command) {
+          applyOptimusCockpitPanelCommand(command)
+        }
 
         break
       }
@@ -476,6 +500,7 @@ export class VoiceClient {
     this.clickTalking = false
     this.turnDone = false
     this.incomingStreamIsFiller = false
+    resetVoiceChatMirror()
     this.playback.flush()
     this.setSpeakingIndicator(false)
     setAvatarListening(false)

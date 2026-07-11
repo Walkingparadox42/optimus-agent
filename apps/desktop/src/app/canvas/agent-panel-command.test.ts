@@ -28,9 +28,17 @@ describe('Optimus cockpit panel command parser', () => {
     ).toEqual({ action: 'open', panel: 'browser', url: 'https://example.com' })
   })
 
+  it('accepts BotVault paths for note navigation', () => {
+    expect(
+      parseOptimusCockpitPanelCommand('tool.start', {
+        args: { action: 'open', panel: 'botvault', path: '/mnt/vaults/BotVault/00-inbox/report.md' },
+        name: OPTIMUS_COCKPIT_PANEL_TOOL
+      })
+    ).toEqual({ action: 'open', panel: 'botvault', path: '/mnt/vaults/BotVault/00-inbox/report.md' })
+  })
+
   it('ignores unrelated tools and invalid panels', () => {
     expect(parseOptimusCockpitPanelCommand('tool.start', { args: { action: 'open', panel: 'chat' }, name: 'other' })).toBeNull()
     expect(parseOptimusCockpitPanelCommand(OPTIMUS_UI_COMMAND_EVENT, { action: 'open', panel: 'terminal' })).toBeNull()
   })
 })
-

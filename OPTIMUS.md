@@ -2455,3 +2455,52 @@ was done.
 - `npm run build` passed. Build emitted the existing dirty-tree warning,
   CSS optimizer warning, large `@tabler/icons-react` barrel warning, and
   large chunk warning.
+
+## 2026-07-11 - Voice-to-canvas bridge repair
+
+Steve reported the real acceptance test was still failing after the prior
+build:
+- Optimus's spoken responses were not mirrored into the Chat window in canvas.
+- Optimus could say it opened BotVault, but canvas did not visibly open it.
+- Optimus could not open a desired BotVault page/note.
+
+Root cause: the prior commit shipped only the canvas BotVault rendering and a
+renderer-side `/api/ws` tool-event hook. The CT115 voice path is a separate
+`:9125/voice` WebSocket, and `VoiceClient` was still explicitly dropping
+`tool.started` / `tool.result` events in its default case. It also kept
+`stt.final` and `agent.text.delta` only in voice-panel atoms, so the Chat
+thread never saw them.
+
+Repair shipped:
+- `app/voice/chat-mirror.ts` mirrors voice turns into the active desktop Chat
+  store as `[via voice]` user/assistant messages. This is intentionally UI-only
+  and does not restructure backend Hermes session state.
+- `app/voice/client.ts` now:
+  - mirrors `stt.final` into Chat as the user voice message,
+  - mirrors streamed `agent.text.delta` into a pending assistant message,
+  - finalizes the mirrored assistant message on `response.done`,
+  - resets the mirror on interruption/teardown,
+  - forwards `tool.started` and `tool.result` through the existing canvas
+    pane-command parser instead of dropping them.
+- `app/canvas/agent-panel-command.ts` now accepts the voice event shape
+  (`tool` as well as `name`) and supports optional BotVault note navigation
+  via `path`, `file`, `note`, or a BotVault-rooted `url`. When panel is
+  `botvault`, it summons canvas mode and opens the path through the same
+  `setCurrentSessionPreviewTarget(..., 'file-browser')` path as a manual
+  tree preview.
+
+Remaining external dependency: CT115 must actually emit a structured
+`tool.started`/`tool.result` payload whose `tool`/`name` is
+`optimus_cockpit_panel` and whose args contain the expected action/panel/path.
+The desktop now listens and acts; if CT115 only returns natural language like
+"I opened BotVault" with no tool event, the renderer has nothing structured to
+execute.
+
+Verification:
+- `npm run typecheck` clean.
+- `npm run lint` clean except the pre-existing warning in
+  `src/app/settings/model-settings.tsx:412`.
+- Focused Vitest passed:
+  `npm.cmd run test:ui -- --run src/app/canvas/agent-panel-command.test.ts src/app/canvas/auto-arrange.test.ts`
+  (2 files, 12 tests).
+- `npm run build` passed and rebuilt `apps/desktop/dist` with the voice bridge.
