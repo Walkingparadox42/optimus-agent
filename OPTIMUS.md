@@ -2024,3 +2024,222 @@ with only the pre-existing `model-settings.tsx` hook dependency warning.
 Follow-up for quality: collect Steve-spoken "Hey Optimus" positives and
 household/office negatives, retrain the same ONNX head, then lower/retune the
 threshold against real mic gates.
+
+**FG-5: Fishing report skill/voice fast-path (2026-07-10).**
+Steve's fishing report skill exists and is registered as the long slash skill
+`/south-florida-fishing-conditions`, but not as `/fishing`. Live logs showed
+the voice run did load the skill via `skill_view`; the failure was downstream:
+the agent tried a blocked `execute_code` path, SearXNG was unreachable, then
+the run was interrupted before it assembled the fallback web data. The bundled
+script itself works:
+`python3 /root/.hermes/skills/leisure/south-florida-fishing-conditions/scripts/fishing_conditions.py`.
+
+Fix applied on CT115:
+- `/opt/optimus-voice-service/voice_service.py` now has a narrow local
+  fast-path for phrases like "run the fishing report" / "fishing conditions".
+  It runs the existing skill helper script directly, streams the result through
+  the normal voice delta/TTS/history path, and does not start a Hermes
+  `/v1/runs` tool loop for that deterministic utility.
+- Backups:
+  `/opt/optimus-voice-service/voice_service.py.bak-fishing-fastpath-<ts>` and
+  `/root/.hermes/config.yaml.bak-fishing-quick-command-<ts>`.
+- `/root/.hermes/config.yaml` now defines a typed `/fishing` quick command
+  that runs the same helper script.
+
+Verification:
+- `python3 -m py_compile /opt/optimus-voice-service/voice_service.py` passed.
+- Restarted `optimus-voice-service`; `/healthz` returns ok.
+- Focused WS test with text input "run the fishing report for this weekend"
+  completed with `run_id: null`, `status: completed`, 0 tool events, and the
+  expected Boynton/Lake Worth fishing report text/audio.
+- Follow-up TTS normalization added on CT115: `voice_service.py` expands
+  compact units only at the speech boundary (`ft` -> feet, `kt`/`kts` ->
+  knots, `80F`/`80 F`/`80-F`/`80°F` -> degrees Fahrenheit, `mph` -> miles per
+  hour). Displayed transcript/history still keep the original compact text.
+
+**FG-6: Voice-only brevity shaping (2026-07-10).**
+CT115 `optimus-voice-service` now passes a voice-specific `instructions`
+field on normal `/v1/runs` calls. This does not affect desktop/text chat and
+does not affect deterministic local fast paths like the fishing report helper.
+Default behavior: voice replies should be much shorter than text, answer first,
+stay under ~100 spoken words unless Steve explicitly asks for full detail / a
+long version / keep going, and offer to continue instead of speaking every
+detail. The default can be overridden with `OPTIMUS_VOICE_RUN_INSTRUCTIONS`.
+
+Backups created on CT115:
+- `/opt/optimus-voice-service/voice_service.py.bak-voice-brevity-<ts>`
+- `/opt/optimus-voice-service/voice_service.py.bak-voice-brevity-tight-<ts>`
+- `/opt/optimus-voice-service/voice_service.py.bak-voice-brevity-hardcap-<ts>`
+
+Verification:
+- `python3 -m py_compile /opt/optimus-voice-service/voice_service.py` passed.
+- Restarted `optimus-voice-service`; `/healthz` returns ok.
+- Focused normal voice WS test with "Explain why voice replies should be
+  shorter than text replies, and give examples" returned a completed Hermes
+  run with a 100-word answer, down from the earlier 245-word result.
+
+2026-07-10 follow-up: the fishing report fast path now applies its own
+deterministic voice summary, because it bypasses normal Hermes `/v1/runs` and
+therefore does not see `OPTIMUS_VOICE_RUN_INSTRUCTIONS`. Voice fishing output
+now speaks only the verdict, right-now conditions, top two windows, and an
+offer to provide the full report. Focused WS test returned `run_id: null`,
+`status: completed`, and a 70-word fishing answer.
+
+Additional TTS-only normalization added:
+- Weekday abbreviations expand at the speech boundary (`Fri` -> Friday,
+  `Sat` -> Saturday, etc.).
+- Numeric slash scores speak as "out of" (`45/100` -> 45 out of 100).
+- Word slashes speak as "and" (`Fair / worth a shot`, `falling/outgoing`).
+- Local fishing shorthand expands where useful (`ICW` -> I C W, `SW`/`SE`/
+  `NW`/`NE` -> compass words).
+
+**FG-7: Conversation follow-up window restored/extended (2026-07-10).**
+Steve reported that Optimus was effectively waking, answering once, then
+falling back to wake-word-only so every follow-up required saying "Hey
+Optimus" again. The always-on frontend state machine was still using the
+original 8s follow-up window, which became too short once voice replies were
+made more concise. Updated `apps/desktop/src/app/voice/always-on.ts`:
+- follow-up window after playback drain is now 2 minutes;
+- follow-up explicitly keeps the wake state in `window` mode so the UI and
+  controller agree that conversation is still hot;
+- the `response.done` no-audio path defers briefly before arming follow-up, so
+  a scheduling race around short/local answers does not prematurely close the
+  conversation window.
+
+Verification: `npm run typecheck` in `apps/desktop` passed.
+
+2026-07-10 follow-up: Steve confirmed conversations still dropped even when
+he started speaking immediately after Optimus finished. Root cause in the
+renderer follow-up/barge-in path: `always-on.ts` detected speech while the
+client still reported `busyWithTurn`, sent `voice.interrupt`, then called
+`startUtteranceStream()` without `allowBusy`, so capture could be rejected at
+the exact moment Steve naturally began a follow-up. Fixed by passing
+`allowBusy: true` whenever the VAD path first performs a barge-in. Verification:
+`npm run typecheck` in `apps/desktop` passed.
+
+---
+
+## Canvas Mode — Phase 1 (2026-07-11). GATE PASSED.
+
+Commit `a5699a9a4` on top of `7e9074bd0`. Third layout mode: floating,
+summonable panels over a themed background, flag-gated as `canvasMode`
+(same pattern as `workspaceMode`). Additive only; flag off is byte-for-byte
+current behavior. None of the six protected files (PaneShell,
+desktop-controller.tsx, layout.ts, panes.ts, app-shell.tsx,
+titlebar-controls.tsx, use-keybinds.ts) changed.
+
+**What shipped.**
+- `canvasMode` persisted flag (`hermes.desktop.canvasMode`), toggled from the
+  command palette ("Toggle canvas mode") or Settings > Appearance. Mutually
+  exclusive with workspace mode, enforced entirely in the canvas store:
+  `setCanvasMode(true)` turns workspace mode off; a `$workspaceMode`
+  subscription drops canvas if workspace turns on (workspace wins boot
+  conflicts). Prevents hidden noVNC/voice panes running under the canvas.
+- Module structure, all new files under `apps/desktop/src/app/canvas/`:
+  `store.ts` (flag, panel open/rect/z + avatar state, sessionStorage layout
+  persistence, exclusivity), `auto-arrange.ts` + `auto-arrange.test.ts`
+  (pure default-layout geometry), `panel.tsx` (machined-plate wrapper),
+  `layer.tsx` (container), `avatar-overlay.tsx`, `dock.tsx`, `chat-host.ts`
+  (portal bridge), `canvas.css` (all chrome), `themes/` (types + registry +
+  `cybertronian.ts`), `index.tsx` (flag gate + lazy mount).
+- Mounting/z-order: canvas is a parallel container, not a shell rework.
+  `app/index.tsx` (was a bare re-export, not protected) now composes
+  `<DesktopController/>` + `<CanvasRoot/>` as siblings. The layer is a fixed,
+  opaque, themed surface at z-10: covers the docked shell (main is z-3),
+  stays under the fixed titlebar controls (z-70) and every overlay
+  (settings z-50, dialogs z-120/130, palette + notifications z-200+), so
+  settings, command palette, session switcher, and toasts all keep working
+  above it. The layer re-provides its own `-webkit-app-region: drag` strip
+  since the stock titlebar drag regions are covered. Layer bundle lazy-loads
+  only when the flag turns on; never mounts in secondary windows.
+
+**Flagged deviation (the one edit to an existing component).** ChatView
+portal extension in `app/chat/index.tsx`, ~8 lines: read `$canvasChatHost`,
+name the existing JSX `view`, and `return canvasChatHost ?
+createPortal(view, canvasChatHost) : view`. Why: the chat spine's entire
+wiring (gateway, composer actions, message stream, session cache) lives in
+DesktopController, which is protected. The portal re-parents the fully-wired
+DOM into the canvas chat panel while state, context, and handlers keep
+flowing through the original tree. Null host (canvas off, or chat panel
+dismissed) renders in place, exactly as stock.
+
+**Panel behavior.**
+- Auto-arrange: `rect: null` = auto; a pure function computes non-overlapping
+  slots (chat left spine, vault narrow middle, browser right; per-panel
+  weights, min/max widths, height fractions, vertical bias) over every
+  MOUNTED panel, so a refolding panel holds its slot until gone. Applied only
+  to panels the user has not placed.
+- Drag (title band) and resize (e/s/se handles) paint the DOM directly during
+  the gesture and commit one manual rect to the store on release; the system
+  respects manual placement until "reset layout" nulls every rect (and
+  returns the avatar to auto).
+- Persistence: sessionStorage `optimus.canvas.layout.v1` — survives reload
+  within a session, resets on fresh launch (per spec; cross-session was
+  explicitly a non-goal).
+- Dock: bottom-center machined strip; per-panel summon/dismiss toggles with a
+  lit accent tick when open, plus reset-layout and exit-canvas buttons.
+- Summon/dismiss motion: transformation-adjacent unfold/refold keyframes
+  (thin energized bar extends to full plate), animationName-keyed lifecycle
+  so child animations can't end stages early; unmount after refold is what
+  tears down live content (the browser pane's RFB client disconnects on
+  dismiss, same as the docked pane). Reduced-motion fallback included.
+
+**Avatar overlay.** Not a panel: a free-positioned plate above the panel
+layer wrapping the existing `AvatarPane` — voice controls and meeting
+recorder ride inside it UNCHANGED, same as workspace mode. Auto mode picks
+the least-overlapping anchor (bottom-right preferred, ties keep the current
+spot stable) against live open-panel rects, with its real footprint measured
+by ResizeObserver; transitions smoothly as panels open/close. Grip-drag pins
+it manual; a pin button on the grip releases it back to auto.
+
+**Theme registry.** Open-ended token sets keyed by normalized profile name
+(`themes/index.ts`): adding profile N = one token file + one
+`PROFILE_THEME_MAP` entry, zero layout/panel changes. Tokens land as
+`--canvas-*` CSS custom properties on the layer root; every piece of canvas
+chrome styles off them in `canvas.css`; panel CONTENTS keep the app theme.
+Cybertronian (Optimus/default) fully designed this pass: dark steel
+gradients with vignette depth, sparse machined seams, one cool key light +
+one faint red ember, chamfered clip-path plates with bevel + etched seams,
+blue `#4f8fd9` reserved for focus/active, red `#c04545` for
+dismiss/alert accents. Scribe, Raven, and Velvet fall back to Cybertronian
+until they get their own token sets.
+
+**Verification (automated, this session).**
+- `npm run typecheck` clean; eslint clean on all touched files; `vite build`
+  clean.
+- vitest: matches the pre-existing failure baseline on main EXACTLY
+  (stash-verified against HEAD: 21 failing tests / 9 files, including the
+  long-known panes width-override failure). New auto-arrange tests pass.
+  messaging/skills test files are flaky under full parallel runs and pass in
+  isolation. Note: `npm run test:ui` sweeps `electron/*.test.cjs` node:test
+  files vitest cannot parse — scope renderer runs to `src/`.
+
+**Gate (Steve, 2026-07-11): PASSED, all checks.**
+- Flag off: zero visible or behavioral change; workspace mode intact.
+- Flag on: Chat, BotVault, and Browser summon auto-arranged over the
+  Cybertronian canvas; drag, resize, dismiss, and re-summon from the dock
+  all work; reset layout returns panels to auto positions.
+- Avatar overlay auto-dodges open panels, drags to manual, pin releases back
+  to auto; voice controls and meeting recorder work inside the avatar plate.
+- Cybertronian theme renders as specced; overlays (settings, palette,
+  switcher, notifications) function above the canvas.
+
+**Known Phase 1 quirks (open items, by design).**
+- Chat panel is empty while a non-chat route (skills/messaging/artifacts) is
+  open — ChatView unmounts with the route; the portal host just sits empty.
+- Preview rail and terminal are not canvas panels yet; a file preview opened
+  from the vault lands in the covered docked rail. Phase 2 scope.
+- Session switching inside canvas goes through the session switcher overlay
+  or command palette; there is no sessions-sidebar panel.
+
+**Phase 2 (NOT STARTED, scoped separately).** Surgical removal of the old
+docked-rail system across the upstream-coupled files (PaneShell et al.),
+canvas mode flips to default, preview/terminal surfaces join the canvas, and
+full theme design for Scribe/Raven/Velvet (plus future profiles) on the
+existing token system. Incremental, file-by-file, reviewed work — not a
+one-shot.
+
+Note: this entry and the FG-5/6/7 entries above sit uncommitted alongside
+`apps/desktop/src/app/voice/always-on.ts` (another session's voice work,
+2026-07-10); the canvas code commit `a5699a9a4` deliberately includes only
+canvas files.

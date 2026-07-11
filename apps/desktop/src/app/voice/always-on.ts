@@ -15,10 +15,12 @@
  *                     between VAD-start and the server's silence endpoint
  *                     (stt.final). Speech during PLAYBACK uses the raised
  *                     threshold and triggers a real barge-in first.
- *   follow-up       — after playback drains, an 8s window keeps the
+ *   follow-up       — after playback drains, a 2 minute window keeps the
  *                     conversation hot without re-waking; timeout returns
  *                     to idle_wake_only.
- * Timeouts ratified by Steve 2026-07-07: 8s ack, 8s follow-up, no hard cap.
+ * Timeouts ratified by Steve 2026-07-07: 8s ack, no hard cap. Follow-up
+ * window extended to 2 minutes on 2026-07-10 after voice replies became
+ * shorter and Steve wanted conversation mode to feel persistent.
  */
 
 import { setAvatarListening } from '@/store/avatar'
@@ -30,7 +32,7 @@ import { EnergyVad } from './vad'
 import { WakeEngine } from './wake-engine'
 
 const ACK_WINDOW_MS = 8_000
-const FOLLOWUP_WINDOW_MS = 8_000
+const FOLLOWUP_WINDOW_MS = 120_000
 
 type WindowState = 'closed' | 'open'
 
@@ -72,7 +74,7 @@ export class AlwaysOnController {
       // at response.done — audio arrives faster than realtime and the
       // window would burn while Piper is still audibly speaking.
       voiceClient.on('playback.drained', () => {
-        if (this.window === 'open' && !voiceClient.busyWithTurn && !voiceClient.streaming) {
+        if (this.window === 'open' && !voiceClient.streaming) {
           this.armFollowup()
         }
       }),
@@ -81,7 +83,11 @@ export class AlwaysOnController {
 
         // Gated/failed turns produce no audio; arm the follow-up directly.
         if (this.window === 'open' && (status === 'ignored' || !voiceClient.audible)) {
-          this.armFollowup()
+          window.setTimeout(() => {
+            if (this.window === 'open' && !voiceClient.audible) {
+              this.armFollowup()
+            }
+          }, 250)
         }
       }),
       voiceClient.on('response.interrupted', () => {
@@ -144,11 +150,13 @@ export class AlwaysOnController {
     const speaking = voiceClient.audible
 
     if (this.vad.detect(pcm, speaking)) {
-      if (speaking || voiceClient.busyWithTurn) {
+      const needsBargeIn = speaking || voiceClient.busyWithTurn
+
+      if (needsBargeIn) {
         voiceClient.interrupt() // voice barge-in (raised threshold path)
       }
 
-      if (voiceClient.startUtteranceStream()) {
+      if (voiceClient.startUtteranceStream({ allowBusy: needsBargeIn })) {
         this.clearCloseTimer()
         voiceClient.sendModeSet('listening_for_turn')
         voiceClient.feedUtteranceFrame(pcm)
@@ -173,6 +181,7 @@ export class AlwaysOnController {
   private armFollowup(): void {
     voiceClient.sendModeSet('waiting_for_followup')
     setAvatarListening(true)
+    $voiceWakeState.set('window')
     this.vad.reset()
     this.armCloseTimer(FOLLOWUP_WINDOW_MS)
   }
