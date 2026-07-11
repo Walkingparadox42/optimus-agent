@@ -281,6 +281,8 @@ export const zhHant = defineLocale({
       toolViewDesc: '產品模式會隱藏原始工具 payload；技術模式會顯示完整輸入/輸出。',
       workspaceModeTitle: '工作區模式',
       workspaceModeDesc: '將聊天、檔案瀏覽器與預覽停靠為駕駛艙工作區。會獨立於預設佈局記住自己的窗格排列。',
+      canvasModeTitle: '畫布模式',
+      canvasModeDesc: '在主題畫布上使用可召喚的浮動面板。啟用時取代停靠欄，並會關閉工作區模式。',
       translucencyTitle: '視窗透明',
       translucencyDesc: '讓整個視窗透出桌面。僅支援 macOS 與 Windows。',
       embedsTitle: '內嵌預覽',
@@ -900,6 +902,18 @@ export const zhHant = defineLocale({
     emptyTitle: '保險庫是空的',
     emptyBody: '保險庫中還沒有檔案。'
   },
+  canvas: {
+    dockAria: '畫布程式塢',
+    panels: {
+      chat: '聊天',
+      botvault: 'BotVault',
+      browser: '瀏覽器'
+    },
+    dismiss: '關閉面板',
+    resetLayout: '重設佈局',
+    exitCanvas: '退出畫布模式',
+    avatarRelease: '恢復自動定位'
+  },
   browserPane: {
     aria: '遠端瀏覽器',
     title: '瀏覽器',
@@ -1000,6 +1014,7 @@ export const zhHant = defineLocale({
     toggleAvatarPane: '切換虛擬形象面板',
     toggleBotVaultPane: '切換 BotVault 面板',
     toggleBrowserPane: '切換瀏覽器面板',
+    toggleCanvasMode: '切換畫布模式',
     toggleWorkspaceMode: '切換工作區模式',
     changeColorMode: '變更色彩模式…',
     pets: {

@@ -8,6 +8,7 @@ import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import type * as React from 'react'
 import { Suspense, useCallback, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
 
 import { Thread } from '@/components/assistant-ui/thread'
@@ -48,6 +49,7 @@ import {
 import { isSecondaryWindow, isWatchWindow } from '@/store/windows'
 import type { ModelOptionsResponse } from '@/types/hermes'
 
+import { $canvasChatHost } from '../canvas/chat-host'
 import { routeSessionId } from '../routes'
 import { titlebarHeaderBaseClass, titlebarHeaderShadowClass, titlebarHeaderTitleClass } from '../shell/titlebar'
 
@@ -283,6 +285,12 @@ export function ChatView({
 }: ChatViewProps) {
   const location = useLocation()
   const { t } = useI18n()
+  // [Optimus Cockpit] Canvas mode re-parents this fully-wired view's DOM into
+  // its floating chat panel via a portal (see app/canvas/chat-host). All state,
+  // context, and handlers keep flowing through this tree; null host (canvas
+  // off / panel dismissed) renders in place, exactly as stock. This is the
+  // one flagged extension to an existing component in canvas Phase 1.
+  const canvasChatHost = useStore($canvasChatHost)
   const activeSessionId = useStore($activeSessionId)
   const awaitingResponse = useStore($awaitingResponse)
   const busy = useStore($busy)
@@ -421,7 +429,7 @@ export function ChatView({
 
   const { dragKind, dropHandlers } = useFileDropZone({ enabled: showChatBar, onDropFiles, onDropSession })
 
-  return (
+  const view = (
     <div
       className={cn(
         'relative isolate flex h-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)',
@@ -523,4 +531,8 @@ export function ChatView({
       </ChatRuntimeBoundary>
     </div>
   )
+
+  // [Optimus Cockpit] See the canvasChatHost note above: re-parent into the
+  // canvas chat panel when one is registered, render in place otherwise.
+  return canvasChatHost ? createPortal(view, canvasChatHost) : view
 }

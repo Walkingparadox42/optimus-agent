@@ -290,6 +290,9 @@ export const ja = defineLocale({
       workspaceModeTitle: 'ワークスペースモード',
       workspaceModeDesc:
         'チャット、ファイルブラウザ、プレビューをコックピットのワークスペースとしてドッキングします。既定とは別に、独自のペイン配置を記憶します。',
+      canvasModeTitle: 'キャンバスモード',
+      canvasModeDesc:
+        'テーマ付きキャンバス上に呼び出し可能なフローティングパネルを配置します。有効な間はドッキングレールを置き換え、ワークスペースモードはオフになります。',
       translucencyTitle: 'ウィンドウの透過',
       translucencyDesc: 'ウィンドウ全体を透過させてデスクトップを表示します。macOS と Windows のみ。',
       embedsTitle: 'インライン埋め込み',
@@ -929,6 +932,18 @@ export const ja = defineLocale({
     emptyTitle: 'ボルトは空です',
     emptyBody: 'ボルトにはまだファイルがありません。'
   },
+  canvas: {
+    dockAria: 'キャンバスドック',
+    panels: {
+      chat: 'チャット',
+      botvault: 'BotVault',
+      browser: 'ブラウザ'
+    },
+    dismiss: 'パネルを閉じる',
+    resetLayout: 'レイアウトをリセット',
+    exitCanvas: 'キャンバスモードを終了',
+    avatarRelease: '自動配置に戻す'
+  },
   browserPane: {
     aria: 'リモートブラウザ',
     title: 'ブラウザ',
@@ -1029,6 +1044,7 @@ export const ja = defineLocale({
     toggleAvatarPane: 'アバターペインを切り替え',
     toggleBotVaultPane: 'BotVaultペインを切り替え',
     toggleBrowserPane: 'ブラウザペインを切り替え',
+    toggleCanvasMode: 'キャンバスモードを切り替え',
     toggleWorkspaceMode: 'ワークスペースモードを切り替え',
     changeColorMode: 'カラーモードを変更…',
     pets: {

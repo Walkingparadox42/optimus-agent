@@ -372,6 +372,8 @@ export const zh: Translations = {
       toolViewDesc: '产品模式隐藏原始工具数据；技术模式显示完整输入/输出。',
       workspaceModeTitle: '工作区模式',
       workspaceModeDesc: '将聊天、文件浏览器和预览停靠为驾驶舱工作区。会独立于默认布局记住自己的窗格排列。',
+      canvasModeTitle: '画布模式',
+      canvasModeDesc: '在主题画布上使用可召唤的浮动面板。启用时替代停靠栏，并会关闭工作区模式。',
       translucencyTitle: '窗口透明',
       translucencyDesc: '让整个窗口透出桌面。仅支持 macOS 和 Windows。',
       embedsTitle: '内嵌预览',
@@ -1092,6 +1094,18 @@ export const zh: Translations = {
     emptyTitle: '保险库为空',
     emptyBody: '保险库中还没有文件。'
   },
+  canvas: {
+    dockAria: '画布程序坞',
+    panels: {
+      chat: '聊天',
+      botvault: 'BotVault',
+      browser: '浏览器'
+    },
+    dismiss: '关闭面板',
+    resetLayout: '重置布局',
+    exitCanvas: '退出画布模式',
+    avatarRelease: '恢复自动定位'
+  },
   browserPane: {
     aria: '远程浏览器',
     title: '浏览器',
@@ -1192,6 +1206,7 @@ export const zh: Translations = {
     toggleAvatarPane: '切换虚拟形象面板',
     toggleBotVaultPane: '切换 BotVault 面板',
     toggleBrowserPane: '切换浏览器面板',
+    toggleCanvasMode: '切换画布模式',
     toggleWorkspaceMode: '切换工作区模式',
     changeColorMode: '更改颜色模式…',
     pets: {

@@ -384,6 +384,9 @@ export const en: Translations = {
       workspaceModeTitle: 'Workspace Mode',
       workspaceModeDesc:
         'Dock chat, file browser, and preview as a cockpit workspace. Remembers its own pane layout, separate from the default.',
+      canvasModeTitle: 'Canvas Mode',
+      canvasModeDesc:
+        'Floating, summonable panels over a themed canvas. Replaces the docked rails while on; turning it on turns workspace mode off.',
       translucencyTitle: 'Window Translucency',
       translucencyDesc: 'See your desktop through the whole window. macOS and Windows only.',
       embedsTitle: 'Inline Embeds',
@@ -911,6 +914,18 @@ export const en: Translations = {
     emptyTitle: 'Vault is empty',
     emptyBody: 'No files in the vault yet.'
   },
+  canvas: {
+    dockAria: 'Canvas dock',
+    panels: {
+      chat: 'Chat',
+      botvault: 'BotVault',
+      browser: 'Browser'
+    },
+    dismiss: 'Dismiss panel',
+    resetLayout: 'Reset layout',
+    exitCanvas: 'Exit canvas mode',
+    avatarRelease: 'Return to auto position'
+  },
   browserPane: {
     aria: 'Remote browser',
     title: 'Browser',
@@ -1011,6 +1026,7 @@ export const en: Translations = {
     toggleAvatarPane: 'Toggle avatar pane',
     toggleBotVaultPane: 'Toggle BotVault pane',
     toggleBrowserPane: 'Toggle browser pane',
+    toggleCanvasMode: 'Toggle canvas mode',
     toggleWorkspaceMode: 'Toggle workspace mode',
     changeColorMode: 'Change color mode…',
     pets: {

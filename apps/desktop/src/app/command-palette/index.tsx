@@ -4,6 +4,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { toggleCanvasMode } from '@/app/canvas/store'
 import { HUD_HEADING, HUD_ITEM, HUD_POSITION, HUD_SURFACE, HUD_TEXT } from '@/app/floating-hud'
 import { setTerminalTakeover } from '@/app/right-sidebar/store'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -27,6 +28,7 @@ import {
   Info,
   KeyRound,
   Layers3,
+  LayoutDashboard,
   MessageCircle,
   Monitor,
   Moon,
@@ -547,6 +549,13 @@ export function CommandPalette() {
             keywords: ['workspace', 'cockpit', 'layout', 'panes', 'dock', 'mode'],
             label: cc.toggleWorkspaceMode,
             run: () => toggleWorkspaceMode()
+          },
+          {
+            icon: LayoutDashboard,
+            id: 'appearance-canvas-mode',
+            keywords: ['canvas', 'cockpit', 'floating', 'panels', 'summon', 'cybertronian', 'mode'],
+            label: cc.toggleCanvasMode,
+            run: () => toggleCanvasMode()
           },
           {
             icon: Users,

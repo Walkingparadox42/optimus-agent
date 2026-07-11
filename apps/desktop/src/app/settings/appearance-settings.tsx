@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 
+import { $canvasMode, setCanvasMode } from '@/app/canvas/store'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -237,6 +238,7 @@ export function AppearanceSettings() {
   const embedAllowed = useStore($embedAllowed)
   const translucency = useStore($translucency)
   const workspaceMode = useStore($workspaceMode)
+  const canvasMode = useStore($canvasMode)
   const installs = useStore($marketplaceInstalls)
   const profiles = useStore($profiles)
   const activeProfileKey = normalizeProfileKey(useStore($activeGatewayProfile))
@@ -449,6 +451,21 @@ export function AppearanceSettings() {
             }
             description={a.workspaceModeDesc}
             title={a.workspaceModeTitle}
+          />
+
+          <ListRow
+            action={
+              <Switch
+                aria-label={a.canvasModeTitle}
+                checked={canvasMode}
+                onCheckedChange={on => {
+                  triggerHaptic('selection')
+                  setCanvasMode(on)
+                }}
+              />
+            }
+            description={a.canvasModeDesc}
+            title={a.canvasModeTitle}
           />
 
           <ListRow

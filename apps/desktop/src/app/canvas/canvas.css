@@ -1,0 +1,470 @@
+/**
+ * [Optimus Cockpit] Canvas mode chrome.
+ *
+ * Everything here styles off the --canvas-* custom properties the layer root
+ * sets from the active profile's theme token set (see ./themes). No app-theme
+ * tokens: panel CONTENTS keep the app theme; this file owns only the canvas
+ * shell — background, plates, dock, avatar shell, motion.
+ *
+ * Plates are machined, not rounded: chamfered corners via clip-path, a 1px
+ * frame layer behind an inset surface layer (clip-path clips real borders, so
+ * the frame IS the border), bevel highlight on the top edge, etched seams.
+ */
+
+.canvas-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  color: var(--canvas-text);
+  background: var(--canvas-background);
+  /* Keep chat header + friends sane inside portaled content: the canvas root
+     sits outside AppShell's variable scope, so re-declare what they read. */
+  --titlebar-height: 34px;
+}
+
+.canvas-root::before,
+.canvas-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Machined seams under, ambient key lights over. */
+.canvas-root::before {
+  background: var(--canvas-etch);
+}
+
+.canvas-root::after {
+  background: var(--canvas-glow);
+}
+
+/* Window drag band across the top; the fixed titlebar control clusters are
+   z-70 and mark themselves no-drag, so they stay clickable above this. */
+.canvas-drag-strip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--titlebar-height);
+  z-index: 40;
+  -webkit-app-region: drag;
+}
+
+/* ── Plates ─────────────────────────────────────────────────────────────── */
+
+.canvas-panel {
+  position: absolute;
+  display: flex;
+  min-width: 180px;
+  min-height: 120px;
+  /* box-shadow (not filter: drop-shadow): a filter here would become the
+     containing block for position:fixed descendants and break the chat's
+     pop-out composer. The chamfers are small enough that the blurred
+     rectangular shadow reads correctly behind the plate. */
+  box-shadow: var(--canvas-plate-shadow);
+}
+
+.canvas-panel[data-focused] {
+  box-shadow: var(--canvas-plate-focus-glow);
+}
+
+.canvas-panel-frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--canvas-plate-border);
+  clip-path: polygon(
+    var(--canvas-chamfer) 0,
+    calc(100% - var(--canvas-chamfer)) 0,
+    100% var(--canvas-chamfer),
+    100% calc(100% - var(--canvas-chamfer)),
+    calc(100% - var(--canvas-chamfer)) 100%,
+    var(--canvas-chamfer) 100%,
+    0 calc(100% - var(--canvas-chamfer)),
+    0 var(--canvas-chamfer)
+  );
+}
+
+.canvas-panel[data-focused] .canvas-panel-frame {
+  background: var(--canvas-plate-focus-border);
+}
+
+.canvas-panel-surface {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--canvas-plate-surface);
+  clip-path: polygon(
+    var(--canvas-chamfer) 0,
+    calc(100% - var(--canvas-chamfer)) 0,
+    100% var(--canvas-chamfer),
+    100% calc(100% - var(--canvas-chamfer)),
+    calc(100% - var(--canvas-chamfer)) 100%,
+    var(--canvas-chamfer) 100%,
+    0 calc(100% - var(--canvas-chamfer)),
+    0 var(--canvas-chamfer)
+  );
+}
+
+/* Bevel: a bright machined edge along the top face. */
+.canvas-panel-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0 var(--canvas-chamfer) auto var(--canvas-chamfer);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--canvas-plate-edge) 18%, var(--canvas-plate-edge) 82%, transparent);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.canvas-panel-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.125rem;
+  flex-shrink: 0;
+  padding: 0 0.625rem 0 0.875rem;
+  background: var(--canvas-title-surface);
+  color: var(--canvas-title-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  user-select: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.canvas-panel-title:active {
+  cursor: grabbing;
+}
+
+/* Etched seam separating title band from body. */
+.canvas-panel-title::after {
+  content: '';
+  position: absolute;
+  inset: auto 0.5rem 0 0.5rem;
+  height: 1px;
+  background: var(--canvas-plate-etch);
+  pointer-events: none;
+}
+
+.canvas-panel-title-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status tick: a small machined light on the title band's left. */
+.canvas-panel-title-tick {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex-shrink: 0;
+  background: var(--canvas-accent);
+  clip-path: polygon(25% 0, 100% 0, 100% 75%, 75% 100%, 0 100%, 0 25%);
+  opacity: 0.9;
+}
+
+.canvas-panel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--canvas-text-dim);
+  cursor: pointer;
+}
+
+.canvas-panel-button:hover {
+  color: var(--canvas-text);
+  background: color-mix(in srgb, var(--canvas-plate-edge) 18%, transparent);
+}
+
+.canvas-panel-button[data-danger]:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--canvas-accent-alt) 72%, transparent);
+}
+
+.canvas-panel-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Resize handles ─────────────────────────────────────────────────────── */
+
+.canvas-resize {
+  position: absolute;
+  z-index: 5;
+  touch-action: none;
+}
+
+.canvas-resize[data-dir='e'] {
+  top: var(--canvas-chamfer);
+  bottom: var(--canvas-chamfer);
+  right: -3px;
+  width: 7px;
+  cursor: col-resize;
+}
+
+.canvas-resize[data-dir='s'] {
+  left: var(--canvas-chamfer);
+  right: var(--canvas-chamfer);
+  bottom: -3px;
+  height: 7px;
+  cursor: row-resize;
+}
+
+.canvas-resize[data-dir='se'] {
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+}
+
+/* ── Motion: transformation-adjacent deploy/stow ────────────────────────── */
+
+.canvas-panel[data-state='summoning'] {
+  animation: canvas-unfold var(--canvas-summon-ms) var(--canvas-ease) both;
+  transform-origin: 50% 18%;
+  pointer-events: none;
+}
+
+.canvas-panel[data-state='summoning'] .canvas-panel-body {
+  animation: canvas-body-in var(--canvas-summon-ms) var(--canvas-ease) both;
+}
+
+.canvas-panel[data-state='dismissing'] {
+  animation: canvas-refold var(--canvas-dismiss-ms) var(--canvas-ease) both;
+  transform-origin: 50% 18%;
+  pointer-events: none;
+}
+
+/* Slide out as a thin energized bar, then extend to the full plate. */
+@keyframes canvas-unfold {
+  0% {
+    transform: scale(0.45, 0.035);
+    opacity: 0;
+  }
+
+  34% {
+    transform: scale(1.012, 0.035);
+    opacity: 1;
+  }
+
+  72% {
+    transform: scale(1, 1.012);
+  }
+
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+@keyframes canvas-body-in {
+  0%,
+  55% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes canvas-refold {
+  0% {
+    transform: scale(1, 1);
+    opacity: 1;
+  }
+
+  55% {
+    transform: scale(1.01, 0.04);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.4, 0.03);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-panel[data-state='summoning'],
+  .canvas-panel[data-state='dismissing'],
+  .canvas-panel[data-state='summoning'] .canvas-panel-body {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Dock ───────────────────────────────────────────────────────────────── */
+
+.canvas-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 1.125rem;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--canvas-dock-surface);
+  border: 1px solid var(--canvas-dock-border);
+  clip-path: polygon(
+    10px 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 10px),
+    0 10px
+  );
+}
+
+.canvas-dock-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  border: none;
+  background: transparent;
+  color: var(--canvas-text-dim);
+  cursor: pointer;
+}
+
+.canvas-dock-button:hover {
+  color: var(--canvas-text);
+  background: color-mix(in srgb, var(--canvas-plate-edge) 16%, transparent);
+}
+
+.canvas-dock-button[data-active] {
+  color: var(--canvas-text);
+}
+
+/* Active indicator: a machined tick under the icon, accent-lit. */
+.canvas-dock-button[data-active]::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.875rem;
+  height: 2px;
+  background: var(--canvas-accent);
+}
+
+.canvas-dock-divider {
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.25rem;
+  background: var(--canvas-dock-border);
+}
+
+/* ── Avatar overlay shell ───────────────────────────────────────────────── */
+
+.canvas-avatar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 25;
+  width: 15rem;
+  display: flex;
+  flex-direction: column;
+  /* On the unclipped wrapper — the frame's clip-path would clip its own shadow. */
+  box-shadow: var(--canvas-plate-shadow);
+}
+
+.canvas-avatar[data-mode='auto'] {
+  transition: transform 420ms var(--canvas-ease);
+}
+
+.canvas-avatar-frame {
+  position: relative;
+  flex: 1;
+  background: var(--canvas-plate-border);
+  clip-path: polygon(
+    var(--canvas-chamfer) 0,
+    calc(100% - var(--canvas-chamfer)) 0,
+    100% var(--canvas-chamfer),
+    100% calc(100% - var(--canvas-chamfer)),
+    calc(100% - var(--canvas-chamfer)) 100%,
+    var(--canvas-chamfer) 100%,
+    0 calc(100% - var(--canvas-chamfer)),
+    0 var(--canvas-chamfer)
+  );
+}
+
+/* Normal-flow child (1px margin = the frame border peeking through), so the
+   plate's height comes from the avatar content instead of a fixed box. */
+.canvas-avatar-surface {
+  position: relative;
+  margin: 1px;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas-plate-surface);
+  clip-path: polygon(
+    var(--canvas-chamfer) 0,
+    calc(100% - var(--canvas-chamfer)) 0,
+    100% var(--canvas-chamfer),
+    100% calc(100% - var(--canvas-chamfer)),
+    calc(100% - var(--canvas-chamfer)) 100%,
+    var(--canvas-chamfer) 100%,
+    0 calc(100% - var(--canvas-chamfer)),
+    0 var(--canvas-chamfer)
+  );
+}
+
+.canvas-avatar-grip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  color: var(--canvas-text-dim);
+}
+
+.canvas-avatar-grip:active {
+  cursor: grabbing;
+}
+
+/* Grip texture: three etched slats. */
+.canvas-avatar-grip::before {
+  content: '';
+  width: 2rem;
+  height: 7px;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--canvas-plate-etch) 0,
+    var(--canvas-plate-etch) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.canvas-avatar-body {
+  position: relative;
+  min-height: 0;
+  /* AvatarPane pads for the app titlebar; there is none inside the plate. */
+  --titlebar-height: 0px;
+  padding-bottom: 0.75rem;
+}

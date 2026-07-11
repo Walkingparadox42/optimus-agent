@@ -304,6 +304,8 @@ export interface Translations {
       toolViewDesc: string
       workspaceModeTitle: string
       workspaceModeDesc: string
+      canvasModeTitle: string
+      canvasModeDesc: string
       translucencyTitle: string
       translucencyDesc: string
       embedsTitle: string
@@ -796,6 +798,18 @@ export interface Translations {
     emptyTitle: string
     emptyBody: string
   }
+  canvas: {
+    dockAria: string
+    panels: {
+      chat: string
+      botvault: string
+      browser: string
+    }
+    dismiss: string
+    resetLayout: string
+    exitCanvas: string
+    avatarRelease: string
+  }
   browserPane: {
     aria: string
     title: string
@@ -896,6 +910,7 @@ export interface Translations {
     toggleAvatarPane: string
     toggleBotVaultPane: string
     toggleBrowserPane: string
+    toggleCanvasMode: string
     toggleWorkspaceMode: string
     changeColorMode: string
     pets: {
