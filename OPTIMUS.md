@@ -2629,3 +2629,52 @@ apps/desktop/src/store/agent-ui-command.ts with preview-target-based panel
 semantics - that module does not exist in this repo and its semantics
 conflict with the approved canvas-store design; only the tool-name fix was
 applied, to the real file. Raised to Steve.
+
+---
+
+## 2026-07-12 - Live bug: gateway panel commands never fired (traced + fixed)
+
+Steve's end-to-end test: CT119 logged the tool executing
+(`[UI] verb=optimus_cockpit_panel args={'action':'open','panel':'botvault',
+'url':None,'path':'Optimus/SCHEMA.md'}`) but the canvas BotVault panel never
+navigated; canvas mode confirmed on. Traced with direct evidence, two
+stacked silent drops:
+
+**Break point 1 (the channel): gateway tool.start carries NO args.**
+Vendor source, tui_gateway/server.py `_on_tool_start`: the tool.start
+payload is `{tool_id, name, context}` — args are display-text only
+(`args_text`, verbose mode). Args ship on tool.COMPLETE
+(`{tool_id, name, args}`, `_on_tool_complete`). The renderer parsed panel
+commands at tool.start, so on the typed-chat path the parser always saw an
+argless payload, failed the action/panel validation, and returned null —
+no gateway panel command has EVER fired, on any tool name. Reproduced in a
+unit test with the exact start-shaped payload before fixing. Fix:
+gateway-event.ts now parses/applies on `tool.complete` (still exactly once
+per call; the direct `optimus.ui.command` event path is unchanged).
+The earlier "apply on start so complete can't double-flip" rule was built
+on the wrong assumption that start carried args.
+
+**Break point 2 (the path): relative vault paths were silently dropped.**
+The live call carried `path: 'Optimus/SCHEMA.md'` — no leading slash, no
+vault root. `openBotVaultPath` required the `/mnt/vaults/BotVault` prefix
+and returned silently otherwise. New `resolveVaultPath()` resolves relative
+paths against the vault root, normalizes backslashes and dot segments
+(traversal like `a/../../etc` cannot escape — resolves first, then checks
+containment), passes vault-rooted absolutes through, and rejects everything
+else LOUDLY (console.warn). Unit tests pin the exact live shape.
+
+**Instrumentation (permanent):** every parsed panel command now logs
+`[cockpit-panel] command {...} (canvas on|OFF, ignored)` to the console, and
+rejected/unresolvable note paths warn — the next "agent said it opened X"
+report is diagnosable from devtools without re-instrumenting.
+
+**Voice path — watch item, not changed:** voice/client.ts still applies on
+the voice service's `tool.started`. If the CT115 voice service forwards the
+gateway's argless start shape, voice panel commands have the same class of
+bug; the fix there is the same one-liner (apply on voice `tool.result`).
+One voice test decides it — flagging rather than guessing, since the voice
+frames' shape isn't observable from this machine and the service is
+latency-critical.
+
+Verification: agent-panel-command tests 15/15 (incl. the pinned live
+payloads), typecheck clean, eslint clean, vite build clean.

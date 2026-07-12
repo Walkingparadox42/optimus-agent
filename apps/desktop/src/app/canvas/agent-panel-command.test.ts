@@ -4,7 +4,8 @@ import {
   applyOptimusCockpitPanelCommand,
   OPTIMUS_COCKPIT_PANEL_TOOL,
   OPTIMUS_UI_COMMAND_EVENT,
-  parseOptimusCockpitPanelCommand
+  parseOptimusCockpitPanelCommand,
+  resolveVaultPath
 } from './agent-panel-command'
 import { $canvasMode, $canvasPanels, dismissPanel } from './store'
 
@@ -69,6 +70,27 @@ describe('Optimus cockpit panel command parser', () => {
     ).toEqual({ action: 'open', panel: 'chat' })
   })
 
+  // The 2026-07-12 live bug, pinned: the gateway's tool.start payload is
+  // {tool_id, name, context} with NO args (tui_gateway _on_tool_start), so a
+  // start-shaped payload must parse to null — commands apply on tool.complete,
+  // which carries {tool_id, name, args}.
+  it('gateway tool.start (argless) yields null; tool.complete (with args) parses', () => {
+    const name = 'mcp_optimus_browser_optimus_cockpit_panel'
+
+    expect(
+      parseOptimusCockpitPanelCommand('tool.start', { context: 'optimus_cockpit_panel', name, tool_id: 'c1' })
+    ).toBeNull()
+
+    // Exact live payload observed on CT119 (url null, relative vault path).
+    expect(
+      parseOptimusCockpitPanelCommand('tool.complete', {
+        args: { action: 'open', panel: 'botvault', path: 'Optimus/SCHEMA.md', url: null },
+        name,
+        tool_id: 'c1'
+      })
+    ).toEqual({ action: 'open', panel: 'botvault', path: 'Optimus/SCHEMA.md' })
+  })
+
   it('still accepts the legacy bare tool name and rejects near-misses', () => {
     const args = { action: 'toggle', panel: 'browser' }
 
@@ -118,5 +140,30 @@ describe('applyOptimusCockpitPanelCommand', () => {
 
     applyOptimusCockpitPanelCommand({ action: 'toggle', panel: 'browser' })
     expect($canvasPanels.get().browser.open).toBe(false)
+  })
+})
+
+describe('resolveVaultPath', () => {
+  const VAULT = '/mnt/vaults/BotVault'
+
+  it('resolves the live relative shape against the vault root', () => {
+    expect(resolveVaultPath('Optimus/SCHEMA.md')).toBe(`${VAULT}/Optimus/SCHEMA.md`)
+    expect(resolveVaultPath('./Optimus/SCHEMA.md')).toBe(`${VAULT}/Optimus/SCHEMA.md`)
+  })
+
+  it('passes through absolute vault-rooted paths and normalizes backslashes', () => {
+    expect(resolveVaultPath(`${VAULT}/notes/a.md`)).toBe(`${VAULT}/notes/a.md`)
+    expect(resolveVaultPath('Optimus\\SCHEMA.md')).toBe(`${VAULT}/Optimus/SCHEMA.md`)
+  })
+
+  it('rejects paths that land outside the vault', () => {
+    expect(resolveVaultPath('/etc/passwd')).toBeNull()
+    expect(resolveVaultPath('../../etc/passwd')).toBeNull()
+    expect(resolveVaultPath('Optimus/../../../etc/passwd')).toBeNull()
+    expect(resolveVaultPath('')).toBeNull()
+  })
+
+  it('resolves internal dot segments without escaping', () => {
+    expect(resolveVaultPath('Optimus/sub/../SCHEMA.md')).toBe(`${VAULT}/Optimus/SCHEMA.md`)
   })
 })

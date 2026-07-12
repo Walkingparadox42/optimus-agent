@@ -102,8 +102,14 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
       const payload = event.payload as GatewayEventPayload | undefined
       const explicitSid = event.session_id || ''
 
+      // Cockpit panel commands ride tool.COMPLETE, not tool.start: the
+      // gateway's tool.start payload is {tool_id, name, context} with NO args
+      // (tui_gateway/server.py _on_tool_start; args_text is display-only), so
+      // parsing at start silently yielded null on every real call — the
+      // 2026-07-12 "panel never opened" live bug. tool.complete carries
+      // {tool_id, name, args} and fires once per call, so apply-once holds.
       const panelCommand =
-        event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.start'
+        event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.complete'
           ? parseOptimusCockpitPanelCommand(event.type, payload)
           : null
 

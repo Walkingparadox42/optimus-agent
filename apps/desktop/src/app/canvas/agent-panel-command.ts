@@ -87,14 +87,50 @@ export function parseOptimusCockpitPanelCommand(eventType: string, payload: unkn
   return { action: action as OptimusCockpitPanelCommand['action'], panel: panel as CanvasPanelId, path, url }
 }
 
-function isVaultPath(path: string): boolean {
-  const normalized = path.replaceAll('\\', '/')
+/**
+ * Resolve an agent-supplied note path to an absolute vault path, or null when
+ * it can't land inside the vault. The live tool call carries whatever the
+ * agent typed — observed on CT119: `path: 'Optimus/SCHEMA.md'`, relative, no
+ * vault root — so relative paths resolve against the vault root instead of
+ * being silently dropped (the second half of the 2026-07-12 live bug).
+ * Dot segments are resolved first, so `a/../../etc` can't traverse out.
+ */
+export function resolveVaultPath(raw: string): string | null {
+  const normalized = raw.trim().replaceAll('\\', '/')
 
-  return normalized === BOTVAULT_PATH || normalized.startsWith(`${BOTVAULT_PATH}/`)
+  if (!normalized) {
+    return null
+  }
+
+  const base = normalized.startsWith('/') ? normalized : `${BOTVAULT_PATH}/${normalized}`
+  const segments: string[] = []
+
+  for (const part of base.split('/')) {
+    if (!part || part === '.') {
+      continue
+    }
+
+    if (part === '..') {
+      segments.pop()
+
+      continue
+    }
+
+    segments.push(part)
+  }
+
+  const resolved = `/${segments.join('/')}`
+
+  return resolved === BOTVAULT_PATH || resolved.startsWith(`${BOTVAULT_PATH}/`) ? resolved : null
 }
 
-async function openBotVaultPath(path: string): Promise<void> {
-  if (!isVaultPath(path)) {
+async function openBotVaultPath(rawPath: string): Promise<void> {
+  const path = resolveVaultPath(rawPath)
+
+  if (!path) {
+    // Loud, greppable rejection — a dropped note path was invisible before.
+    console.warn('[cockpit-panel] note path rejected (outside vault):', rawPath)
+
     return
   }
 
@@ -102,10 +138,17 @@ async function openBotVaultPath(path: string): Promise<void> {
 
   if (target) {
     setCurrentSessionPreviewTarget(target, 'file-browser', path)
+  } else {
+    console.warn('[cockpit-panel] note path did not resolve to a preview target:', path)
   }
 }
 
 export function applyOptimusCockpitPanelCommand(command: OptimusCockpitPanelCommand): void {
+  // Permanent breadcrumb: every applied (or gated) command is visible in
+  // devtools, so "the agent said it opened X and nothing happened" is
+  // diagnosable from the console instead of re-instrumenting each time.
+  console.info('[cockpit-panel] command', command, $canvasMode.get() ? '(canvas on)' : '(canvas OFF, ignored)')
+
   // Panel commands act only while canvas mode is ALREADY on (Steve,
   // 2026-07-12, option (a)): an agent call must never silently switch the
   // user's layout mode. Outside canvas it no-ops with a visible toast so the
