@@ -10,6 +10,26 @@ import { $canvasMode, type CanvasPanelId, dismissPanel, summonPanel, toggleCanva
 export const OPTIMUS_COCKPIT_PANEL_TOOL = 'optimus_cockpit_panel'
 export const OPTIMUS_UI_COMMAND_EVENT = 'optimus.ui.command'
 
+// Build-currency breadcrumb: fires once when this module loads. If this line
+// is missing from the console after a window reload, the renderer is NOT
+// running the current tree — check that before debugging anything downstream.
+console.info('[cockpit-panel] listener module loaded (tool.complete channel, 2026-07-12)')
+
+/**
+ * Diagnostic for the silent-miss case: an event that LOOKS cockpit-related
+ * (name/tool mentions optimus/cockpit) but failed to parse. Logs the whole
+ * payload so a name or argument-shape mismatch is visible in devtools instead
+ * of vanishing. Quiet for all unrelated tools.
+ */
+export function logUnparsedCockpitCandidate(eventType: string, payload: unknown): void {
+  const record = asRecord(payload)
+  const name = String(record.name ?? record.tool ?? '')
+
+  if (/cockpit|optimus/i.test(name)) {
+    console.warn('[cockpit-panel] candidate event did NOT parse — name/shape mismatch:', eventType, payload)
+  }
+}
+
 export interface OptimusCockpitPanelCommand {
   action: 'close' | 'open' | 'toggle'
   panel: CanvasPanelId

@@ -2678,3 +2678,41 @@ latency-critical.
 
 Verification: agent-panel-command tests 15/15 (incl. the pinned live
 payloads), typecheck clean, eslint clean, vite build clean.
+
+### Addendum 2026-07-12b: retest silent - evidence gathered, instrumentation tightened
+
+Retest showed NO [cockpit-panel] log at all. Direct evidence gathered before
+changing anything:
+- Running app confirmed DEV MODE from this tree: repo electron.exe, plain
+  vite on 127.0.0.1:5174 (HMR ON - dev-no-hmr.mjs is only the profiling
+  launcher), renderer attached to the dev server. Not a stale packaged build
+  by launch mode, but load currency of the open window is unproven (no CDP
+  port to inspect).
+- Gateway sockets ESTABLISHED to CT115 192.168.0.116:9119 (netstat, renderer
+  PIDs). TCP-level alive; frame-level arrival unproven from outside.
+- use-preview-routing wrapper delegates EVERY event to the base handler
+  (first line) - no filtering upstream of the parse.
+- Expected live tool name confirmed from vendor sanitizer
+  (sanitize_mcp_name_component: non-alnum -> _):
+  mcp_optimus_browser_optimus_cockpit_panel - accepted by the matcher.
+- Key realization: the round-1a7dea100 instrumentation logs only AFTER a
+  successful parse, so "no log" is ambiguous between "event never arrived"
+  and "arrived but name/shape mismatched". Silence was uninformative by
+  construction.
+
+Instrumentation-only changes (zero behavior):
+1. Module-load breadcrumb: "[cockpit-panel] listener module loaded
+   (tool.complete channel, 2026-07-12)" - missing after a window reload =>
+   the renderer is not running this tree; stop and fix that first.
+2. Every tool.complete logs its tool name at DEBUG level (enable Verbose in
+   devtools) => proves the socket delivers tool events at all (also answers
+   whether the vault live-view feed is alive).
+3. Any cockpit/optimus-looking event that fails to parse now console.warns
+   with the FULL payload => a name or argument-shape mismatch becomes
+   visible instead of vanishing.
+
+Next test decision tree: no armed line => stale/wrong renderer (reload /
+restart dev). Armed but no tool.complete debug lines during the call =>
+events not reaching this socket (check CT115 _tool_progress_enabled / which
+backend the session ran on). Warn line => exact payload captured, fix is
+mechanical. Apply log => working.

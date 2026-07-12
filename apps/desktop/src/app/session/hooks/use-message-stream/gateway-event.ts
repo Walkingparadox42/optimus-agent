@@ -3,6 +3,7 @@ import { type MutableRefObject, useCallback } from 'react'
 
 import {
   applyOptimusCockpitPanelCommand,
+  logUnparsedCockpitCandidate,
   OPTIMUS_UI_COMMAND_EVENT,
   parseOptimusCockpitPanelCommand
 } from '@/app/canvas/agent-panel-command'
@@ -108,10 +109,16 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
       // parsing at start silently yielded null on every real call — the
       // 2026-07-12 "panel never opened" live bug. tool.complete carries
       // {tool_id, name, args} and fires once per call, so apply-once holds.
-      const panelCommand =
-        event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.complete'
-          ? parseOptimusCockpitPanelCommand(event.type, payload)
-          : null
+      const panelCommandCandidate = event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.complete'
+
+      // Event-arrival breadcrumb (debug level — enable Verbose in devtools):
+      // answers "is this window's gateway socket receiving tool.complete at
+      // all" directly, which also covers the vault live-view feed.
+      if (event.type === 'tool.complete') {
+        console.debug('[cockpit-panel] tool.complete seen:', (payload as { name?: unknown })?.name ?? '(unnamed)')
+      }
+
+      const panelCommand = panelCommandCandidate ? parseOptimusCockpitPanelCommand(event.type, payload) : null
 
       if (panelCommand) {
         applyOptimusCockpitPanelCommand(panelCommand)
@@ -119,6 +126,10 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         if (event.type === OPTIMUS_UI_COMMAND_EVENT) {
           return
         }
+      } else if (panelCommandCandidate) {
+        // Cockpit-looking events that fail to parse must be LOUD — a silent
+        // null here is what hid the 2026-07-12 live bugs.
+        logUnparsedCockpitCandidate(event.type, payload)
       }
 
       if (!explicitSid && gatewayEventRequiresSessionId(event.type)) {
