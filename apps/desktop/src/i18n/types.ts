@@ -812,6 +812,8 @@ export interface Translations {
     resetLayout: string
     exitCanvas: string
     avatarRelease: string
+    agentCommandIgnoredTitle: string
+    agentCommandIgnoredBody: string
   }
   browserPane: {
     aria: string

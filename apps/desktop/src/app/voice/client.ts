@@ -418,7 +418,14 @@ export class VoiceClient {
         break
       }
 
-      case 'tool.result':
+      // Panel commands apply exactly ONCE per tool call — on tool.started,
+      // matching the gateway path (which applies on tool.start only). CT115
+      // emits both frames for a call, so also applying on tool.result made
+      // `toggle` double-flip back to where it started.
+      case 'tool.result': {
+        break
+      }
+
       case 'tool.started': {
         const command = parseOptimusCockpitPanelCommand('tool.start', message)
 

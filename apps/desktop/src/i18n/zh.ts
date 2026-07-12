@@ -1107,7 +1107,9 @@ export const zh: Translations = {
     dismiss: '关闭面板',
     resetLayout: '重置布局',
     exitCanvas: '退出画布模式',
-    avatarRelease: '恢复自动定位'
+    avatarRelease: '恢复自动定位',
+    agentCommandIgnoredTitle: '已忽略 Optimus 的面板指令',
+    agentCommandIgnoredBody: '画布模式已关闭。开启后 Optimus 才能打开和关闭面板。'
   },
   browserPane: {
     aria: '远程浏览器',

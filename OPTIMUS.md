@@ -2504,3 +2504,113 @@ Verification:
   `npm.cmd run test:ui -- --run src/app/canvas/agent-panel-command.test.ts src/app/canvas/auto-arrange.test.ts`
   (2 files, 12 tests).
 - `npm run build` passed and rebuilt `apps/desktop/dist` with the voice bridge.
+
+---
+
+## 2026-07-12 - optimus_cockpit_panel transmitter + panel-command hardening
+
+The receiver-only half of agent-controlled panes (d3bfa494d/dd7cd3b6c) gets
+its transmitter, plus the two known bugs fixed. Renderer work in
+apps/desktop (no protected files); server work on CT119.
+
+### CT119: optimus_cockpit_panel tool in the browser bridge (DEPLOYED + VERIFIED)
+
+Added to the EXISTING `optimus-browser` MCP server
+(`/opt/optimus-browser-bridge/bridge.py`) rather than a new service — one
+process, one registration, and it can chain `navigate` in-process for the
+bundled browser open. Patch (backup at
+`bridge.py.bak-2026-07-12-cockpit-panel`):
+- New verb category `UI_VERBS = {"optimus_cockpit_panel"}`: mutates Cockpit
+  RENDERER state only, always allowed, NO approval gate (per spec: local UI
+  state, not data-mutating). The fail-closed startup categorization check and
+  its log line learned the new set, so an uncategorized future verb still
+  refuses to start.
+- Tool `optimus_cockpit_panel(action, panel, url?, path?)`: validates
+  action in {open, close, toggle} and panel in {chat, botvault, browser},
+  logs, returns a well-formed envelope. The panel change itself executes in
+  the desktop renderer, which watches its own tool-event stream (gateway
+  /api/ws `tool.start`; voice :9125 `tool.started`) — the tool body is the
+  transmitter, not the executor.
+- Bundled browser open: panel='browser' + action='open' + url ALSO calls the
+  existing `navigate` verb in the same tool call. NOTE the gate reality:
+  navigate has been in AUTO_WRITE_VERBS (auto-approved) since 2026-07-06
+  (`bridge.py.bak-ungated-navigate-…`), so the chained navigation executes
+  immediately; the approval gate still covers click/type_text/press/
+  restart_browser, all untouched. A navigation failure never fails the panel
+  command (the pane-open event has already fired renderer-side).
+
+Verified on CT119 with a real MCP client (same SDK Hermes uses):
+tools/list shows all 8 verbs incl. `optimus_cockpit_panel`; `{action:'open',
+panel:'chat'}` returns the ok envelope; `{action:'open', panel:'browser',
+url:'https://example.com'}` returns ok + `navigate:{url,title:'Example
+Domain'}` and `page_info` confirms the shared browser actually moved;
+`{action:'summon'}` returns a well-formed `ok:false` error; startup
+category check passes (`verbs OK … ui=['optimus_cockpit_panel']`);
+healthz 200; service active.
+
+### Renderer fix 1: voice-path double-fire
+
+`voice/client.ts` applied parse+apply on BOTH `tool.started` and
+`tool.result`, so `toggle` flipped twice (net no-op) once CT115 emits both
+frames. Now applies exactly once, on `tool.started` — matching the gateway
+path, which applies on `tool.start` only. `tool.result` is consumed without
+action. Nothing else in the voice receive path or chat-mirror touched;
+/v1/runs and always-on.ts untouched.
+
+### Renderer fix 2: no silent mode switch (option (a))
+
+`applyOptimusCockpitPanelCommand` no longer forces `setCanvasMode(true)`.
+Panel commands act only while canvas mode is ALREADY on; otherwise the
+command no-ops with a visible toast ("Optimus panel command ignored — canvas
+mode is off…", i18n'd in all 4 locales). Chosen: option (a), less
+surprising — an agent call never changes the user's layout mode.
+
+### Renderer fix 3: browser url bundling replaces the stub toast
+
+The renderer's "Optimus browser URL requested" info toast is gone. On
+panel='browser'+url the renderer only summons the pane — by the time the
+tool event reaches it, the CT119 tool has already chained the navigation.
+One agent call now = pane summoned + page loading, as originally specced.
+
+Tests: `agent-panel-command.test.ts` grew apply-behavior coverage (no-op
+outside canvas, open/close inside, single-flip toggle).
+
+### CT115 registration / verification (Steve — copy-paste)
+
+No new registration should be needed: the tool rides the already-registered
+`optimus-browser` server (Phase 6 step 3 config). Hermes discovers tools per
+MCP session, so it needs a reconnect/restart to see the new one. On CT115:
+
+```bash
+# 1. Confirm the existing registration (path per your install):
+grep -n -A3 "optimus-browser" ~/.hermes/config.yaml 2>/dev/null \
+  || grep -rn -A3 "optimus-browser" /root/.hermes/ 2>/dev/null | head
+
+# 2. Reachability from CT115 (no auth on healthz):
+curl -s -o /dev/null -w "bridge healthz=%{http_code}\n" http://192.168.0.119:9126/healthz
+
+# 3. Restart your hermes serve / voice-service processes so their MCP
+#    sessions re-list tools (your units, your call), then:
+
+# 4. Prove Hermes sees it — ask the agent (typed or voice):
+#    "Call optimus_cockpit_panel with action open, panel chat."
+#    Expected: desktop in CANVAS MODE summons the Chat panel; in workspace/
+#    stock mode you get the 'command ignored — canvas mode is off' toast.
+
+# 5. Bundled browser test:
+#    "Call optimus_cockpit_panel with action open, panel browser, url https://example.com"
+#    Expected: browser panel summons AND the shared browser loads the page
+#    (navigate is auto-approved; no approval wait).
+```
+
+Watch the tool fire on CT119 if curious:
+`journalctl -u optimus-browser-bridge -f` shows
+`[UI] verb=optimus_cockpit_panel args={...}` per call.
+
+### Verification (renderer)
+
+typecheck clean; eslint clean on touched files; `vite build` clean; full
+vitest matches the established baseline exactly (same 9 pre-existing failing
+files + the 2 known parallel-run flakes). Touched:
+`app/canvas/agent-panel-command.ts` (+test), `app/voice/client.ts`
+(double-fire guard only), i18n x5. CT119: `bridge.py` (backed up).

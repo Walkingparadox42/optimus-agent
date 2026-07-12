@@ -915,7 +915,9 @@ export const zhHant = defineLocale({
     dismiss: '關閉面板',
     resetLayout: '重設佈局',
     exitCanvas: '退出畫布模式',
-    avatarRelease: '恢復自動定位'
+    avatarRelease: '恢復自動定位',
+    agentCommandIgnoredTitle: '已忽略 Optimus 的面板指令',
+    agentCommandIgnoredBody: '畫布模式已關閉。開啟後 Optimus 才能開啟和關閉面板。'
   },
   browserPane: {
     aria: '遠端瀏覽器',

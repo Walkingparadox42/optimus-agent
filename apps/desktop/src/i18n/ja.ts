@@ -945,7 +945,9 @@ export const ja = defineLocale({
     dismiss: 'パネルを閉じる',
     resetLayout: 'レイアウトをリセット',
     exitCanvas: 'キャンバスモードを終了',
-    avatarRelease: '自動配置に戻す'
+    avatarRelease: '自動配置に戻す',
+    agentCommandIgnoredTitle: 'Optimus のパネル操作を無視しました',
+    agentCommandIgnoredBody: 'キャンバスモードがオフです。Optimus にパネルを操作させるにはオンにしてください。'
   },
   browserPane: {
     aria: 'リモートブラウザ',

@@ -927,7 +927,9 @@ export const en: Translations = {
     dismiss: 'Dismiss panel',
     resetLayout: 'Reset layout',
     exitCanvas: 'Exit canvas mode',
-    avatarRelease: 'Return to auto position'
+    avatarRelease: 'Return to auto position',
+    agentCommandIgnoredTitle: 'Optimus panel command ignored',
+    agentCommandIgnoredBody: 'Canvas mode is off. Turn it on for Optimus to open and close panels.'
   },
   browserPane: {
     aria: 'Remote browser',
