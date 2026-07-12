@@ -38,6 +38,30 @@ function toolArgs(payload: Record<string, unknown>): unknown {
   return args
 }
 
+/**
+ * True for every name the cockpit-panel tool can arrive under. Hermes exposes
+ * MCP tools as `mcp_{sanitized_server}_{sanitized_tool}` (vendor
+ * tools/mcp_tool.py), so the LIVE name is a composite like
+ * `mcp_optimus_browser_optimus_cockpit_panel` — and the server key half is
+ * deployment config, not ours to assume. Accept the bare tool name (voice
+ * service / direct emits) and any `mcp_`-prefixed composite containing it.
+ */
+function isCockpitPanelToolName(name: unknown): boolean {
+  if (typeof name !== 'string') {
+    return false
+  }
+
+  const normalized = name.toLowerCase()
+
+  return (
+    normalized === OPTIMUS_COCKPIT_PANEL_TOOL ||
+    (normalized.startsWith('mcp_') && normalized.includes(OPTIMUS_COCKPIT_PANEL_TOOL)) ||
+    // Observed live shape on CT115 (Steve, 2026-07-12) — the sanitized
+    // composite can also land with the tool name split around the server key.
+    normalized === 'mcp_optimus_cockpit_panel_panel'
+  )
+}
+
 export function parseOptimusCockpitPanelCommand(eventType: string, payload: unknown): OptimusCockpitPanelCommand | null {
   const record = asRecord(payload)
   const toolName = record.name ?? record.tool
@@ -45,7 +69,7 @@ export function parseOptimusCockpitPanelCommand(eventType: string, payload: unkn
   const source =
     eventType === OPTIMUS_UI_COMMAND_EVENT
       ? record
-      : toolName === OPTIMUS_COCKPIT_PANEL_TOOL
+      : isCockpitPanelToolName(toolName)
         ? asRecord(toolArgs(record))
         : {}
 

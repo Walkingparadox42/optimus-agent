@@ -47,6 +47,40 @@ describe('Optimus cockpit panel command parser', () => {
     expect(parseOptimusCockpitPanelCommand('tool.start', { args: { action: 'open', panel: 'chat' }, name: 'other' })).toBeNull()
     expect(parseOptimusCockpitPanelCommand(OPTIMUS_UI_COMMAND_EVENT, { action: 'open', panel: 'terminal' })).toBeNull()
   })
+
+  // Hermes prefixes MCP tools as mcp_{server}_{tool} (tools/mcp_tool.py), so
+  // the live event never carries the bare name — every registration variant
+  // must parse, or agent panel commands silently do nothing.
+  it('accepts the live mcp_-prefixed composite tool names', () => {
+    const args = { action: 'open', panel: 'chat' }
+
+    expect(
+      parseOptimusCockpitPanelCommand('tool.start', { args, name: 'mcp_optimus_browser_optimus_cockpit_panel' })
+    ).toEqual({ action: 'open', panel: 'chat' })
+
+    expect(parseOptimusCockpitPanelCommand('tool.start', { args, name: 'mcp_optimus_cockpit_panel_panel' })).toEqual({
+      action: 'open',
+      panel: 'chat'
+    })
+
+    // Voice event shape carries `tool` instead of `name`.
+    expect(
+      parseOptimusCockpitPanelCommand('tool.start', { args, tool: 'mcp_optimus_browser_optimus_cockpit_panel' })
+    ).toEqual({ action: 'open', panel: 'chat' })
+  })
+
+  it('still accepts the legacy bare tool name and rejects near-misses', () => {
+    const args = { action: 'toggle', panel: 'browser' }
+
+    expect(parseOptimusCockpitPanelCommand('tool.start', { args, name: 'optimus_cockpit_panel' })).toEqual({
+      action: 'toggle',
+      panel: 'browser'
+    })
+
+    // Not mcp_-prefixed and not the bare name — never a panel command.
+    expect(parseOptimusCockpitPanelCommand('tool.start', { args, name: 'optimus_cockpit_panel_extra' })).toBeNull()
+    expect(parseOptimusCockpitPanelCommand('tool.start', { args, name: 'other_optimus_cockpit_panel' })).toBeNull()
+  })
 })
 
 describe('applyOptimusCockpitPanelCommand', () => {

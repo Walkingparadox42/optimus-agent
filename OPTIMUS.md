@@ -2614,3 +2614,18 @@ vitest matches the established baseline exactly (same 9 pre-existing failing
 files + the 2 known parallel-run flakes). Touched:
 `app/canvas/agent-panel-command.ts` (+test), `app/voice/client.ts`
 (double-fire guard only), i18n x5. CT119: `bridge.py` (backed up).
+
+### Addendum 2026-07-12: live MCP tool names parse now
+
+Wiring bug: Hermes exposes MCP tools as mcp_{server}_{tool}
+(tools/mcp_tool.py), so live calls arrive as e.g.
+mcp_optimus_browser_optimus_cockpit_panel - the parser matched only the bare
+optimus_cockpit_panel and real agent calls silently did nothing.
+agent-panel-command.ts now accepts the bare name, any mcp_-prefixed
+composite containing it, and the observed CT115 variant
+mcp_optimus_cockpit_panel_panel; near-miss names still reject. Tests cover
+all shapes (name + voice `tool` field). NOTE: a paste-in spec referenced
+apps/desktop/src/store/agent-ui-command.ts with preview-target-based panel
+semantics - that module does not exist in this repo and its semantics
+conflict with the approved canvas-store design; only the tool-name fix was
+applied, to the real file. Raised to Steve.
