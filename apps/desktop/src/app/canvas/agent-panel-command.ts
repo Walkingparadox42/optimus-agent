@@ -6,7 +6,14 @@ import { setCurrentSessionPreviewTarget } from '@/store/preview'
 
 import { BOTVAULT_PATH } from '../botvault/use-vault-tree'
 
-import { $canvasMode, type CanvasPanelId, dismissPanel, summonPanel, toggleCanvasPanel } from './store'
+import {
+  $canvasMode,
+  CANVAS_PANEL_IDS,
+  type CanvasPanelId,
+  dismissPanel,
+  summonPanel,
+  toggleCanvasPanel
+} from './store'
 
 export const OPTIMUS_COCKPIT_PANEL_TOOL = 'optimus_cockpit_panel'
 export const OPTIMUS_UI_COMMAND_EVENT = 'optimus.ui.command'
@@ -38,8 +45,18 @@ export interface OptimusCockpitPanelCommand {
   url?: string
 }
 
-const PANEL_IDS = new Set<CanvasPanelId>(['botvault', 'browser', 'chat'])
+const PANEL_IDS = new Set<CanvasPanelId>(CANVAS_PANEL_IDS)
 const ACTIONS = new Set<OptimusCockpitPanelCommand['action']>(['close', 'open', 'toggle'])
+
+const SHARED_BROWSER_TOOL_SUFFIXES = new Set([
+  'click',
+  'navigate',
+  'observe',
+  'page_info',
+  'press',
+  'restart_browser',
+  'type_text'
+])
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -83,9 +100,30 @@ function isCockpitPanelToolName(name: unknown): boolean {
   )
 }
 
+function isSharedBrowserToolName(name: unknown): boolean {
+  if (typeof name !== 'string') {
+    return false
+  }
+
+  const normalized = name.toLowerCase()
+
+  if (!normalized.startsWith('mcp_optimus_browser_')) {
+    return false
+  }
+
+  return [...SHARED_BROWSER_TOOL_SUFFIXES].some(suffix => normalized.endsWith(`_${suffix}`))
+}
+
 export function parseOptimusCockpitPanelCommand(eventType: string, payload: unknown): OptimusCockpitPanelCommand | null {
   const record = asRecord(payload)
   const toolName = record.name ?? record.tool
+
+  // Every action against the shared CT119 browser is visible work. Reveal its
+  // canvas pane as soon as the action starts; unrelated headless browser tools
+  // must not summon this pane.
+  if ((eventType === 'tool.start' || eventType === 'tool.started') && isSharedBrowserToolName(toolName)) {
+    return { action: 'open', panel: 'browser' }
+  }
 
   const source =
     eventType === OPTIMUS_UI_COMMAND_EVENT

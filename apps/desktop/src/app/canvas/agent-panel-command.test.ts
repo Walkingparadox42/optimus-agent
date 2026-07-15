@@ -46,6 +46,30 @@ describe('Optimus cockpit panel command parser', () => {
     ).toEqual({ action: 'open', panel: 'botvault', path: '/mnt/vaults/BotVault/00-inbox/report.md' })
   })
 
+  it('summons the shared browser as soon as visible browser work starts', () => {
+    for (const name of [
+      'mcp_optimus_browser_navigate',
+      'mcp_optimus_browser_click',
+      'mcp_optimus_browser_type_text',
+      'mcp_optimus_browser_observe'
+    ]) {
+      expect(parseOptimusCockpitPanelCommand('tool.start', { name })).toEqual({ action: 'open', panel: 'browser' })
+    }
+
+    expect(parseOptimusCockpitPanelCommand('tool.complete', { name: 'mcp_optimus_browser_navigate' })).toBeNull()
+    expect(parseOptimusCockpitPanelCommand('tool.start', { name: 'browser_navigate' })).toBeNull()
+    expect(parseOptimusCockpitPanelCommand('tool.start', { name: 'mcp_other_browser_navigate' })).toBeNull()
+  })
+
+  it('does not reopen the browser for an explicit close command', () => {
+    expect(
+      parseOptimusCockpitPanelCommand('tool.started', {
+        args: { action: 'close', panel: 'browser' },
+        tool: 'mcp_optimus_browser_optimus_cockpit_panel'
+      })
+    ).toEqual({ action: 'close', panel: 'browser' })
+  })
+
   it('ignores unrelated tools and invalid panels', () => {
     expect(parseOptimusCockpitPanelCommand('tool.start', { args: { action: 'open', panel: 'chat' }, name: 'other' })).toBeNull()
     expect(parseOptimusCockpitPanelCommand(OPTIMUS_UI_COMMAND_EVENT, { action: 'open', panel: 'terminal' })).toBeNull()
@@ -125,13 +149,15 @@ describe('applyOptimusCockpitPanelCommand', () => {
 
   it('opens and closes panels while canvas mode is on', () => {
     $canvasMode.set(true)
-    dismissPanel('chat')
 
-    applyOptimusCockpitPanelCommand({ action: 'open', panel: 'chat' })
-    expect($canvasPanels.get().chat.open).toBe(true)
+    for (const panel of ['chat', 'botvault', 'browser'] as const) {
+      dismissPanel(panel)
+      applyOptimusCockpitPanelCommand({ action: 'open', panel })
+      expect($canvasPanels.get()[panel].open).toBe(true)
 
-    applyOptimusCockpitPanelCommand({ action: 'close', panel: 'chat' })
-    expect($canvasPanels.get().chat.open).toBe(false)
+      applyOptimusCockpitPanelCommand({ action: 'close', panel })
+      expect($canvasPanels.get()[panel].open).toBe(false)
+    }
   })
 
   it('toggle flips exactly once per applied command', () => {

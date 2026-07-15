@@ -109,7 +109,10 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
       // parsing at start silently yielded null on every real call — the
       // 2026-07-12 "panel never opened" live bug. tool.complete carries
       // {tool_id, name, args} and fires once per call, so apply-once holds.
-      const panelCommandCandidate = event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.complete'
+      // Explicit commands apply from tool.complete (full args); shared-browser
+      // activity applies from tool.start so the pane appears while work runs.
+      const panelCommandCandidate =
+        event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.start' || event.type === 'tool.complete'
 
       // Event-arrival breadcrumb (debug level — enable Verbose in devtools):
       // answers "is this window's gateway socket receiving tool.complete at
@@ -126,7 +129,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         if (event.type === OPTIMUS_UI_COMMAND_EVENT) {
           return
         }
-      } else if (panelCommandCandidate) {
+      } else if (event.type === OPTIMUS_UI_COMMAND_EVENT || event.type === 'tool.complete') {
         // Cockpit-looking events that fail to parse must be LOUD — a silent
         // null here is what hid the 2026-07-12 live bugs.
         logUnparsedCockpitCandidate(event.type, payload)

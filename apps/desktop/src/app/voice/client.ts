@@ -419,11 +419,11 @@ export class VoiceClient {
         break
       }
 
-      // Apply panel commands exactly once on the completed frame. That matches
-      // the typed gateway path and gives CT115 a chance to attach final args;
-      // applying started and result would double-flip a toggle command.
-      case 'tool.result': {
-        const command = parseOptimusCockpitPanelCommand('tool.complete', message)
+      // CT115 forwards display-redacted structured args on tool.started. Apply
+      // once there so panes are visible while Optimus works; result is ignored
+      // so toggle cannot flip twice.
+      case 'tool.started': {
+        const command = parseOptimusCockpitPanelCommand('tool.started', message)
 
         if (command) {
           applyOptimusCockpitPanelCommand(command)
@@ -432,7 +432,7 @@ export class VoiceClient {
         break
       }
 
-      case 'tool.started': {
+      case 'tool.result': {
         break
       }
 

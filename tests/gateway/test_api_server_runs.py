@@ -94,6 +94,22 @@ def auth_adapter():
     return _make_adapter(api_key="sk-secret")
 
 
+@pytest.mark.asyncio
+async def test_run_tool_started_event_preserves_display_args(adapter):
+    run_id = "run_canvas_pane"
+    queue = asyncio.Queue()
+    adapter._run_streams[run_id] = queue
+    adapter._set_run_status(run_id, "running")
+    callback = adapter._make_run_event_callback(run_id, asyncio.get_running_loop())
+    args = {"action": "close", "panel": "browser"}
+
+    callback("tool.started", "mcp_optimus_browser_optimus_cockpit_panel", "close browser", args)
+
+    event = await asyncio.wait_for(queue.get(), timeout=1)
+    assert event["event"] == "tool.started"
+    assert event["args"] == args
+
+
 # ---------------------------------------------------------------------------
 # POST /v1/runs — start a run
 # ---------------------------------------------------------------------------

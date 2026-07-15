@@ -2716,3 +2716,387 @@ restart dev). Armed but no tool.complete debug lines during the call =>
 events not reaching this socket (check CT115 _tool_progress_enabled / which
 backend the session ran on). Warn line => exact payload captured, fix is
 mechanical. Apply log => working.
+
+---
+
+## 2026-07-15 - BotVault live work surface, voice-first avatar, shared GPU modes, and patient Conversation Mode
+
+This session closed the remaining gap between Hermes saying it performed an
+action and the Cockpit visibly reflecting that action. It then repaired the
+avatar's casual-speech note commands, restored Voicebox, replaced the emerging
+RTX 3060 service conflict with an explicit GPU mode controller, and added a
+patient Conversation Mode to the digital avatar.
+
+No passwords, bearer tokens, private SSH keys, or copied voice samples are
+recorded here. Runtime credentials remain only on their respective machines.
+
+### 1. BotVault became a live, agent-driven work surface
+
+Target behavior:
+
+- Tell Hermes to open or create a note.
+- See the note appear in the right-side BotVault note viewer.
+- See its containing folder path revealed in the left-side vault tree.
+- Watch subsequent writes refresh in real time while Steve and Hermes work on
+  the note together.
+- Automatically open a meeting-recorder note for inspection after it is saved.
+
+Implemented and verified:
+
+- CT115 now runs the authoritative vault event watcher on port `9128` against
+  `/mnt/vaults/BotVault`.
+- The desktop has a live vault-event bridge and follows session-origin writes.
+- Agent panel commands now open the BotVault note viewer through the same
+  preview-target path as a manual file-tree selection.
+- Opening a note also expands/reveals its ancestors and selects the note in the
+  left-side folder tree, so the visible tree communicates where the note lives.
+- The meeting recorder publishes the completed note path to the same open-note
+  path after transcription/summarization, so a newly saved inbox note opens
+  automatically.
+- Voice panel commands apply on the completed `tool.result` frame, where the
+  final arguments exist. This avoids the old argless-start failure and prevents
+  double-applying toggle commands.
+- Event delivery and note opening were tested against real BotVault paths on
+  CT115, not only mocked UI state.
+
+Repository/runtime artifacts include:
+
+- `apps/desktop/services/optimus-vault-events/`
+- desktop vault-event store and BotVault preview/tree routing
+- meeting-recorder completion routing
+- voice `tool.result` panel-command handling
+
+The user acceptance gate passed in the real Cockpit: chat can summon notes,
+the note appears on the right, and its path is visible in the left tree.
+
+Git checkpoint:
+
+- `7a6c9bb08 feat(desktop): make BotVault a live work surface`
+- Pushed to `origin/main`.
+
+### 2. Avatar note-opening became casual and voice-forward
+
+Observed failures on CT115 showed that the avatar path was not equivalent to
+typed chat:
+
+- The fast path required explicit BotVault/canvas wording.
+- Its verb list did not recognize normal speech such as `call up`, `pop up`,
+  `fire up`, or `lemme see`.
+- STT variants such as `Botfall`, `Val Dory`, joined/split filenames, and
+  spelled letters defeated exact token matching.
+- Vague two-part speech such as `open that in BotVault` followed by the note
+  name had no conversational state.
+- Some weak matches claimed success while selecting the wrong note.
+
+Implemented in
+`apps/desktop/services/optimus-voice-service/botvault_voice.py`:
+
+- Strong casual intent recognition without requiring the words BotVault,
+  canvas, pane, note, or file when the verb itself is clear.
+- Filename/path fuzzy matching with conservative confidence thresholds.
+- Joined/split word matching and common STT normalization.
+- Spelled-name normalization, including the observed Valdori variants.
+- Folder-aware recency requests such as `the latest pricing file`.
+- A 20-second follow-up window for two-part commands.
+- Low-confidence and ambiguous requests return no match instead of opening a
+  random note.
+
+Live examples verified against the actual vault:
+
+- `Call up the Val Dory note` ->
+  `/mnt/vaults/BotVault/Optimus/Omega Squad/The Valdori/The Valdori.md`
+- `Can you call up the latest pricing file from the pricing projects?` -> the
+  most recently modified matching pricing note.
+- `Open fishing-boats.md in the incubating folder on the Botfall pane` -> the
+  intended incubating note.
+- `Open that in BotVault` followed by `that Optimus Monetization MD` -> the
+  intended note through the follow-up window.
+
+CT115 deployment:
+
+- `/opt/optimus-voice-service/botvault_voice.py`
+- patched `/opt/optimus-voice-service/voice_service.py`
+- backup:
+  `/opt/optimus-voice-service/voice_service.py.bak-2026-07-15-voice-first-botvault`
+
+Unit tests and the authenticated real WebSocket BotVault smoke test passed.
+
+### 3. Voicebox outage diagnosis exposed the shared-GPU problem
+
+Voicebox on CT120 (`192.168.0.120:17493`) had fallen back to Piper because
+`voicebox.service` had been manually stopped on July 12 and remained disabled.
+The service was enabled and restarted. Health then passed, CUDA detected the
+RTX 3060, and the HTTP port was reachable, but a real Chatterbox Turbo
+generation returned HTTP 500.
+
+The real failure was CUDA out-of-memory, not Voicebox HTTP availability:
+
+- CT102 `bonsai.service`: about 8.5 GB VRAM for Bonsai 27B.
+- CT120 Voicebox/Chatterbox Turbo: about 4.5-4.8 GB resident when warmed.
+- CT120 ComfyUI process: about 100 MB when idle, potentially much more after a
+  model/workflow load.
+- GPU: RTX 3060 with 12 GB VRAM.
+
+All three GPU services were active and enabled at the same time. Their boot
+policy therefore recreated the conflict after restarts. A port or health check
+alone was proven insufficient: Voicebox can report healthy before a synthesis
+attempt loads the model and fails.
+
+### 4. Exclusive GPU mode controller deployed
+
+Decision: treat the RTX 3060 as one shared appliance with explicit exclusive
+workload modes. The Hermes-facing surface lives on CT115, while the privileged
+cross-container controller lives on Urithiru because only the Proxmox host can
+safely manage services in both CT102 and CT120.
+
+Stable CT115 command contract:
+
+```text
+optimus-gpu status
+optimus-gpu voice
+optimus-gpu image
+optimus-gpu llm
+optimus-gpu idle
+```
+
+Mode behavior:
+
+- `voice`: enable/start CT120 `voicebox.service`; disable/stop ComfyUI and
+  Bonsai.
+- `image`: enable/start CT120 `comfyui.service`; disable/stop Voicebox and
+  Bonsai.
+- `llm`: enable/start CT102 `bonsai.service`; disable/stop Voicebox and
+  ComfyUI.
+- `idle`: disable/stop all three GPU-heavy services.
+
+Controller guarantees:
+
+- A host lock serializes transitions.
+- Every transition stops conflicting services and waits for VRAM release.
+- The selected service's systemd enablement is made persistent; non-selected
+  services remain disabled so a reboot cannot recreate the collision.
+- Voice readiness performs a real Chatterbox generation, not only `/health`.
+- LLM readiness performs a real Bonsai inference.
+- Image readiness checks ComfyUI's live system-stats API; image generation
+  itself remains workflow-specific.
+- A failed readiness check stops the partial target and returns to `idle`.
+- Output is a single stable JSON object for Hermes and future Cockpit controls.
+
+Security boundary:
+
+- CT115 has a dedicated SSH key under `/etc/optimus-gpu-controller/`.
+- Urithiru's matching `authorized_keys` entry is forced through
+  `/usr/local/sbin/optimus-gpu-ssh` with OpenSSH restrictions.
+- The forced command accepts only `status`, `voice`, `image`, `llm`, and
+  `idle`.
+- A live attempt to run `uname -a` through the key was rejected with exit 64;
+  the key cannot open a Proxmox shell or invoke arbitrary `pct`/systemctl
+  commands.
+- Pre-controller host authorization backup:
+  `/root/.ssh/authorized_keys.bak-optimus-gpu-20260715`.
+
+Deployed paths:
+
+- Urithiru: `/usr/local/sbin/optimus-gpu-controller`
+- Urithiru: `/usr/local/sbin/optimus-gpu-ssh`
+- CT115: `/usr/local/bin/optimus-gpu`
+- CT115 Hermes skill:
+  `/root/.hermes/skills/optimus-gpu-mode/SKILL.md`
+- Source and operating notes:
+  `apps/desktop/services/optimus-gpu-controller/`
+
+Live acceptance results:
+
+- Initial unsafe state correctly reported `mode: mixed`, all three services
+  active/enabled, and approximately 8.6 GB resident.
+- `voice`: real WAV generated, approximately 4.6 GB VRAM, no Piper fallback.
+- `image`: ComfyUI alone and ready, approximately 108 MB idle VRAM.
+- `llm`: real Bonsai completion, approximately 8.5 GB VRAM.
+- `idle`: every service stopped/disabled and VRAM fell to 1 MB.
+- Final persistent operating mode restored to `voice`.
+- Hermes reports the `optimus-gpu-mode` skill as local and enabled.
+
+Natural-language examples taught to Hermes include `fire up Bonsai`, `switch
+over to image generation`, `call up Voicebox`, `free the GPU`, and `what is
+using the GPU?`.
+
+### 5. Patient Conversation Mode added to the digital avatar
+
+The existing voice modes were not patient enough for a person who pauses to
+think:
+
+- Wake acknowledgement window: 8 seconds before any speech.
+- Normal server silence endpoint: 1.2-2.0 seconds after speech.
+- Normal maximum utterance: 30 seconds.
+
+The avatar now has an explicit `Conversation mode` button. Its policy is the
+longest-listening voice policy in the Cockpit:
+
+- No wake word is required after the button is enabled.
+- Before speech begins, local VAD remains ready indefinitely until the user
+  switches the button off or presses Stop.
+- Before VAD detects intentional speech, microphone frames remain local to the
+  desktop and are not uploaded to CT115.
+- After speech begins, the server tolerates an 8-second thinking pause.
+- A single utterance can remain open for up to five minutes.
+- The mode remains open across assistant responses and follow-up turns.
+- The setting is session-only and deliberately not persisted; an open
+  conversation microphone never re-enables itself after restart/reconnect.
+- Push-to-talk, wake-word, barge-in, playback, and normal fast endpoint timings
+  are unchanged.
+
+Renderer implementation:
+
+- `apps/desktop/src/app/voice/index.tsx`: button, active state, explanatory
+  copy, Stop integration.
+- `apps/desktop/src/app/voice/store.ts`: session-only conversation atom.
+- `apps/desktop/src/app/voice/always-on.ts`: explicit patient open-window
+  state, no acknowledgement/follow-up timeout, correct mode propagation.
+- `apps/desktop/src/app/voice/client.ts`: privacy-safe teardown resets the mode.
+- `apps/desktop/src/app/voice/always-on.test.ts`: immediate open, no timer,
+  VAD mode retention, and switch-off coverage.
+- i18n contract/copy updated across English, Japanese, simplified Chinese, and
+  traditional Chinese.
+
+CT115 endpoint policy:
+
+- `/opt/optimus-voice-service/conversation_mode.py`
+- `conversation_mode` silence window: 8 seconds.
+- `conversation_mode` maximum utterance: 300 seconds.
+- All existing/unknown modes retain the previous standard defaults.
+- Patched `/opt/optimus-voice-service/voice_service.py` imports this policy.
+- Backup:
+  `/opt/optimus-voice-service/voice_service.py.bak-2026-07-15-conversation-mode`
+
+Live Conversation Mode verification:
+
+- Authenticated WebSocket smoke held an utterance open through a deliberate
+  3.2-second pause. Every pre-existing mode would have ended by two seconds.
+- Explicit commit then produced `stt.final` through the expected path.
+- Full legacy avatar smoke passed afterward: speech/commit, normal silence
+  endpoint, upstream cancellation, stale-frame rejection, transcript gate,
+  TTS sequencing, and mid-audio barge-in.
+
+### 6. Transcript gate hardening discovered during regression testing
+
+The first broad regression run found an unrelated but real faster-whisper edge
+case: the 0.5-second synthetic `uh` gate sample sometimes transcribed as seven
+`a` tokens or as 20+ words/numbers. That physically impossible transcript
+bypassed the old filler-only regex and unnecessarily started a Hermes run.
+
+Added `apps/desktop/services/optimus-voice-service/transcript_gate.py`:
+
+- Preserves the existing empty/tiny/filler gate.
+- Rejects token rates physically impossible for the captured audio duration.
+- Keeps a six-token floor so legitimate short replies such as `yes please` and
+  plausible fast phrases are not dropped.
+
+CT115 deployment:
+
+- `/opt/optimus-voice-service/transcript_gate.py`
+- backup:
+  `/opt/optimus-voice-service/voice_service.py.bak-2026-07-15-transcript-gate`
+
+After hardening, 11 local/deployed unit tests passed, the full voice smoke suite
+returned `RESULT: ALL CHECKS PASSED`, Conversation Mode's pause smoke passed,
+Voicebox remained active, and the journal contained zero Piper fallback lines.
+
+### 7. Build, verification, and git state
+
+Desktop verification:
+
+- `npm run typecheck`: passed.
+- Focused Conversation Mode Vitest: 3/3 passed.
+- ESLint: no new errors; only the known unrelated
+  `model-settings.tsx:412` hook-dependency warning.
+- Production desktop build: passed and rebuilt `apps/desktop/dist`.
+
+Voice/GPU verification:
+
+- GPU controller unit tests: 5/5 passed.
+- Voice resolver + Conversation Mode + transcript gate unit tests: 11/11
+  passed.
+- Authenticated BotVault voice smoke: passed.
+- Authenticated Conversation Mode pause smoke: passed.
+- Full avatar voice smoke: all checks passed.
+- Deployed/local SHA-256 values matched for the controller and voice policy
+  artifacts checked during deployment.
+
+Git checkpoint:
+
+- `caf15e9e8 feat(desktop): add GPU modes and patient voice conversations`
+- 26 files, 1,296 insertions, 8 deletions.
+- Includes the GPU controller, CT115 Hermes skill, casual BotVault voice
+  resolver, Conversation Mode UI/policy/tests, and transcript gate hardening.
+- Pushed successfully to `origin/main`; local `main`, `origin/main`, and
+  `origin/HEAD` all resolved to `caf15e9e8` at session end.
+
+Unrelated local `.claude` files and the stray `how --stat a5699a9a4` file were
+intentionally left untracked and untouched.
+
+---
+
+## 2026-07-15 - Avatar control of every canvas pane
+
+The avatar could operate content inside a canvas pane but could not reliably
+summon or stow the pane itself. The browser made the failure especially clear:
+Optimus could navigate the shared CT119 tab while its Browser pane remained
+closed, leaving the work invisible until Steve opened it manually.
+
+Two independent causes were confirmed in the live path:
+
+- CT115 `/v1/runs` omitted the display-redacted structured tool arguments from
+  `tool.started`, and the voice service consequently forwarded only a preview.
+  Explicit `optimus_cockpit_panel` calls reached Electron without `action` or
+  `panel` and could not be applied.
+- Shared CT119 browser verbs such as `navigate`, `click`, and `observe` were not
+  considered pane intent. Only a separate explicit panel-tool call summoned
+  the Browser.
+
+Implemented:
+
+- `/v1/runs` now includes its already-redacted structured `args` on
+  `tool.started`; CT115 voice forwards them unchanged.
+- The voice renderer applies explicit panel commands once at tool start, so
+  `toggle` cannot double-fire and panes move before the work finishes.
+- Typed-chat gateway handling still applies explicit commands from
+  `tool.complete` (its authoritative full-args event), while shared-browser
+  activity reveals Browser immediately from `tool.start`.
+- Every shared CT119 browser verb that represents visible work (`page_info`,
+  `observe`, `navigate`, `click`, `type_text`, `press`, `restart_browser`)
+  summons Browser. Native/headless Hermes browser tools are deliberately not
+  matched, and `optimus_cockpit_panel(action=close,panel=browser)` is excluded
+  from implicit reveal so close does not reopen itself.
+- Pane validation now derives from `CANVAS_PANEL_IDS`; Chat, BotVault, and
+  Browser are all covered by the same open/close/toggle path.
+- CT115 voice instructions and the CT119 MCP tool description explicitly treat
+  casual phrases such as `bring up`, `call up`, `pop up`, `hide`, `dismiss`,
+  `stow`, `put away`, and `get rid of` as direct canvas UI intent.
+
+Deployment:
+
+- CT115 shared Hermes install patched at
+  `/usr/local/lib/hermes-agent/gateway/platforms/api_server.py`.
+- CT115 voice service patched at
+  `/opt/optimus-voice-service/voice_service.py`.
+- The actual voice-facing user service, `hermes-gateway.service` on port 8642,
+  was gracefully restarted, along with `optimus-voice-service`.
+- CT119 `/opt/optimus-browser-bridge/bridge.py` received the strengthened tool
+  description and `optimus-browser-bridge` was restarted; health returned 200.
+- Backups use the suffix `.bak-20260715-canvas-pane-controls` on both hosts.
+
+Verification:
+
+- Canvas command Vitest: 18/18 passed.
+- Python `/v1/runs` structured-args regression: passed.
+- Desktop TypeScript typecheck: passed.
+- Desktop production build: passed.
+- ESLint: no errors; only the known unrelated
+  `model-settings.tsx:412` hook-dependency warning after the touched-file
+  formatting warning was corrected.
+- Authenticated live avatar smoke through CT115 voice WebSocket passed:
+  `Close the browser pane` produced
+  `{'action': 'close', 'panel': 'browser'}` on `tool.started`.
+- Final live state: CT115 `hermes-gateway.service`, `hermes-dashboard`, and
+  `optimus-voice-service` active; CT119 `optimus-browser-bridge` active and
+  healthy.

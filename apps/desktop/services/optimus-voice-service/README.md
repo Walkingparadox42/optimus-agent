@@ -50,10 +50,21 @@ implausible for the audio duration while preserving plausible short replies.
 - `/opt/optimus-voice-service/test_botvault_voice.py`
 - `/opt/optimus-voice-service/smoke_botvault.py`
 - `/opt/optimus-voice-service/smoke_conversation_mode.py`
+- `/opt/optimus-voice-service/smoke_canvas_panes.py`
 - Patched `/opt/optimus-voice-service/voice_service.py`
 - Backup: `/opt/optimus-voice-service/voice_service.py.bak-2026-07-15-voice-first-botvault`
 - Backup: `/opt/optimus-voice-service/voice_service.py.bak-2026-07-15-conversation-mode`
 - Backup: `/opt/optimus-voice-service/voice_service.py.bak-2026-07-15-transcript-gate`
+- Backup: `/opt/optimus-voice-service/voice_service.py.bak-20260715-canvas-pane-controls`
+
+## Avatar canvas-pane control
+
+The voice run stream preserves the display-redacted structured arguments on
+`tool.started`. The desktop can therefore apply `optimus_cockpit_panel`
+commands immediately and exactly once. Casual requests to bring up, call up,
+hide, dismiss, or put away Chat, BotVault, and Browser are treated as direct UI
+intent. Any shared CT119 browser activity also summons the Browser pane at
+tool start so the work is visible while it happens.
 
 ## Verification
 
@@ -62,5 +73,6 @@ cd /opt/optimus-voice-service
 venv/bin/python -m unittest -v test_botvault_voice.py test_conversation_mode.py test_transcript_gate.py
 venv/bin/python smoke_botvault.py
 venv/bin/python smoke_conversation_mode.py
+venv/bin/python smoke_canvas_panes.py
 venv/bin/python smoke_test.py
 ```
