@@ -1136,6 +1136,9 @@ export const zh: Translations = {
     connFailed: '语音连接失败。',
     echoTest: '回声测试（不打断播放的采集）',
     alwaysOn: '常开（唤醒词）',
+    conversationMode: '对话模式',
+    conversationModeActive: '对话模式已开启',
+    conversationModeHint: '准备好后再开始；最多可停顿 8 秒。',
     wakeHint: '说 "Hey Optimus"',
     wakeLoading: '正在加载唤醒模型…',
     wakeFailed: '唤醒引擎加载失败。'

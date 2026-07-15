@@ -12,6 +12,7 @@ import {
   $voiceAlwaysOn,
   $voiceAnswer,
   $voiceConnection,
+  $voiceConversationMode,
   $voiceEchoTest,
   $voiceError,
   $voiceServerUrl,
@@ -44,6 +45,7 @@ export function VoiceControls() {
   const token = useStore($voiceToken)
   const echoTest = useStore($voiceEchoTest)
   const alwaysOnPref = useStore($voiceAlwaysOn)
+  const conversationMode = useStore($voiceConversationMode)
   const wakeState = useStore($voiceWakeState)
 
   const connect = useCallback(
@@ -56,18 +58,23 @@ export function VoiceControls() {
 
   // Pane unmount (workspace mode off / app teardown) → drop mic + socket.
   useEffect(() => () => {
+    $voiceConversationMode.set(false)
     alwaysOn.disable()
     voiceClient.disconnect()
   }, [])
 
-  // Always-on follows the persisted preference while a session is live.
+  // Wake-word and explicit Conversation Mode share the local mic/VAD
+  // controller. Conversation Mode is session-only and opens the window
+  // directly; always-on still requires the wake word.
   useEffect(() => {
-    if (connection === 'ready' && alwaysOnPref) {
+    alwaysOn.setConversationMode(conversationMode)
+
+    if (connection === 'ready' && (alwaysOnPref || conversationMode)) {
       void alwaysOn.enable()
     } else {
       alwaysOn.disable()
     }
-  }, [alwaysOnPref, connection])
+  }, [alwaysOnPref, connection, conversationMode])
 
   const errorText =
     error === 'mic-denied' ? v.micDenied : error === 'connection-failed' ? v.connFailed : error
@@ -126,8 +133,30 @@ export function VoiceControls() {
       >
         {phaseLabel}
       </Button>
+      <Button
+        aria-pressed={conversationMode}
+        className={cn('w-full', conversationMode && 'ring-2 ring-(--ui-accent)')}
+        onClick={() => $voiceConversationMode.set(!conversationMode)}
+        size="sm"
+        variant={conversationMode ? 'default' : 'outline'}
+      >
+        {conversationMode ? v.conversationModeActive : v.conversationMode}
+      </Button>
+      {conversationMode && (
+        <p className="text-center text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+          {v.conversationModeHint}
+        </p>
+      )}
       {showStop && (
-        <Button className="w-full" onClick={() => alwaysOn.stop()} size="sm" variant="destructive">
+        <Button
+          className="w-full"
+          onClick={() => {
+            $voiceConversationMode.set(false)
+            alwaysOn.stop()
+          }}
+          size="sm"
+          variant="destructive"
+        >
           {v.stop}
         </Button>
       )}

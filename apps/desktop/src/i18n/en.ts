@@ -956,6 +956,9 @@ export const en: Translations = {
     connFailed: 'Voice connection failed.',
     echoTest: 'Echo test (capture without interrupting)',
     alwaysOn: 'Always-on (wake word)',
+    conversationMode: 'Conversation mode',
+    conversationModeActive: 'Conversation mode on',
+    conversationModeHint: 'Listening patiently — start when ready; pauses up to 8 seconds are okay.',
     wakeHint: 'Say "Hey Optimus"',
     wakeLoading: 'Loading wake models…',
     wakeFailed: 'Wake engine failed to load.'

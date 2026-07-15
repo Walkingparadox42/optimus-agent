@@ -33,6 +33,7 @@ import { WakeEngine } from './wake-engine'
 
 const ACK_WINDOW_MS = 8_000
 const FOLLOWUP_WINDOW_MS = 120_000
+export const CONVERSATION_MODE = 'conversation_mode'
 
 type WindowState = 'closed' | 'open'
 
@@ -40,15 +41,21 @@ export class AlwaysOnController {
   private wake = new WakeEngine()
   private vad = new EnergyVad()
   private enabled = false
+  private enabling = false
+  private enableRequested = false
+  private conversationMode = false
   private window: WindowState = 'closed'
   private closeTimer: null | ReturnType<typeof setTimeout> = null
   private unsubscribe: Array<() => void> = []
 
   async enable(): Promise<void> {
-    if (this.enabled) {
+    this.enableRequested = true
+
+    if (this.enabled || this.enabling) {
       return
     }
 
+    this.enabling = true
     $voiceWakeState.set('loading')
 
     try {
@@ -59,6 +66,15 @@ export class AlwaysOnController {
       console.error('[voice] wake engine load failed:', error)
       $voiceError.set(`wake engine: ${String(error).slice(0, 200)}`)
       $voiceWakeState.set('error')
+      this.enabling = false
+
+      return
+    }
+
+    this.enabling = false
+
+    if (!this.enableRequested) {
+      $voiceWakeState.set('off')
 
       return
     }
@@ -94,17 +110,28 @@ export class AlwaysOnController {
         // A barge-in (voice or PTT) keeps the window open: the interrupter
         // is about to talk.
         if (this.window === 'open') {
-          this.armCloseTimer(ACK_WINDOW_MS)
+          if (this.conversationMode) {
+            this.keepConversationOpen()
+          } else {
+            this.armCloseTimer(ACK_WINDOW_MS)
+          }
         }
       })
     ]
 
     this.vad.reset()
     this.wake.reset()
-    $voiceWakeState.set('listening')
+
+    if (this.conversationMode) {
+      this.openConversationWindow()
+    } else {
+      $voiceWakeState.set('listening')
+    }
   }
 
   disable(): void {
+    this.enableRequested = false
+
     if (!this.enabled) {
       return
     }
@@ -119,6 +146,26 @@ export class AlwaysOnController {
 
     this.unsubscribe = []
     $voiceWakeState.set('off')
+  }
+
+  /** Explicit patient listening: no wake word and no initial/follow-up
+   * timeout. The user closes this window with the same button or Stop. */
+  setConversationMode(enabled: boolean): void {
+    if (this.conversationMode === enabled) {
+      return
+    }
+
+    this.conversationMode = enabled
+
+    if (!this.enabled) {
+      return
+    }
+
+    if (enabled) {
+      this.openConversationWindow()
+    } else {
+      this.closeWindow()
+    }
   }
 
   /** Manual user panic/stop control: close a false wake/listening window,
@@ -158,7 +205,7 @@ export class AlwaysOnController {
 
       if (voiceClient.startUtteranceStream({ allowBusy: needsBargeIn })) {
         this.clearCloseTimer()
-        voiceClient.sendModeSet('listening_for_turn')
+        voiceClient.sendModeSet(this.conversationMode ? CONVERSATION_MODE : 'listening_for_turn')
         voiceClient.feedUtteranceFrame(pcm)
       }
     }
@@ -179,11 +226,30 @@ export class AlwaysOnController {
   }
 
   private armFollowup(): void {
+    if (this.conversationMode) {
+      this.keepConversationOpen()
+
+      return
+    }
+
     voiceClient.sendModeSet('waiting_for_followup')
     setAvatarListening(true)
     $voiceWakeState.set('window')
     this.vad.reset()
     this.armCloseTimer(FOLLOWUP_WINDOW_MS)
+  }
+
+  private openConversationWindow(): void {
+    this.window = 'open'
+    this.keepConversationOpen()
+  }
+
+  private keepConversationOpen(): void {
+    this.clearCloseTimer()
+    voiceClient.sendModeSet(CONVERSATION_MODE)
+    setAvatarListening(true)
+    $voiceWakeState.set('window')
+    this.vad.reset()
   }
 
   private armCloseTimer(ms: number): void {

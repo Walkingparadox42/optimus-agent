@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+
+mode="${1:-status}"
+case "$mode" in
+  status|voice|image|llm|idle) ;;
+  *)
+    echo "usage: optimus-gpu {status|voice|image|llm|idle}" >&2
+    exit 64
+    ;;
+esac
+
+if [ "$#" -gt 1 ]; then
+  echo "usage: optimus-gpu {status|voice|image|llm|idle}" >&2
+  exit 64
+fi
+
+exec ssh \
+  -T \
+  -o BatchMode=yes \
+  -o ConnectTimeout=10 \
+  -o IdentitiesOnly=yes \
+  -o StrictHostKeyChecking=yes \
+  -o UserKnownHostsFile=/etc/optimus-gpu-controller/known_hosts \
+  -i /etc/optimus-gpu-controller/id_ed25519 \
+  root@192.168.0.18 \
+  "optimus-gpu $mode"

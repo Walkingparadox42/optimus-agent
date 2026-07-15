@@ -944,6 +944,9 @@ export const zhHant = defineLocale({
     connFailed: '語音連線失敗。',
     echoTest: '回聲測試（不中斷播放的擷取）',
     alwaysOn: '常開（喚醒詞）',
+    conversationMode: '對話模式',
+    conversationModeActive: '對話模式已開啟',
+    conversationModeHint: '準備好後再開始；最多可停頓 8 秒。',
     wakeHint: '說 "Hey Optimus"',
     wakeLoading: '正在載入喚醒模型…',
     wakeFailed: '喚醒引擎載入失敗。'

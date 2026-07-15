@@ -840,6 +840,9 @@ export interface Translations {
     connFailed: string
     echoTest: string
     alwaysOn: string
+    conversationMode: string
+    conversationModeActive: string
+    conversationModeHint: string
     wakeHint: string
     wakeLoading: string
     wakeFailed: string

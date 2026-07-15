@@ -43,3 +43,8 @@ export type VoiceWakeState = 'error' | 'listening' | 'loading' | 'off' | 'window
 
 export const $voiceAlwaysOn = persistentAtom('optimus.voice.alwaysOn', false, Codecs.bool)
 export const $voiceWakeState = atom<VoiceWakeState>('off')
+
+// Explicit, session-only patient listening. This is intentionally not
+// persisted: an open conversation microphone must always be re-enabled by a
+// deliberate button press after an app restart or reconnect.
+export const $voiceConversationMode = atom(false)

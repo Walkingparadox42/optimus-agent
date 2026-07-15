@@ -1,0 +1,31 @@
+--- voice_service.py
++++ voice_service.py
+@@
+ import aiohttp
+ from aiohttp import web, WSMsgType
++
++from botvault_voice import is_botvault_open_intent, resolve_botvault_note
+@@
+         self.mic_dropped = 0
++        # A vague command such as "open that in BotVault" leaves a short
++        # follow-up window so "the Val Dory note" can complete the request.
++        self.botvault_followup_until = 0.0
+@@
+     async def _maybe_cockpit_panel_command(self, text: str, turn_epoch: int) -> str | None:
+-        if not BOTVAULT_CANVAS_RE.search(text) or not BOTVAULT_OPEN_RE.search(text):
++        explicit_intent = is_botvault_open_intent(text)
++        pending_followup = time.monotonic() < self.botvault_followup_until
++        if not explicit_intent and not pending_followup:
+             return None
+
+-        target_path = _resolve_botvault_note(text)
++        target_path = resolve_botvault_note(text, BOTVAULT_ROOT)
++        if not target_path and pending_followup and not explicit_intent:
++            return None
++
+         args = {"action": "open", "panel": "botvault"}
+         if target_path:
+             args["path"] = target_path
++            self.botvault_followup_until = 0.0
++        else:
++            self.botvault_followup_until = time.monotonic() + 20.0

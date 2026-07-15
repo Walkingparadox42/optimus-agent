@@ -974,6 +974,9 @@ export const ja = defineLocale({
     connFailed: '音声接続に失敗しました。',
     echoTest: 'エコーテスト（中断せずにキャプチャ）',
     alwaysOn: '常時オン（ウェイクワード）',
+    conversationMode: '会話モード',
+    conversationModeActive: '会話モード オン',
+    conversationModeHint: '準備ができたら話してください。8秒までの間を待ちます。',
     wakeHint: '「Hey Optimus」と話しかけてください',
     wakeLoading: 'ウェイクモデルを読み込み中…',
     wakeFailed: 'ウェイクエンジンの読み込みに失敗しました。'

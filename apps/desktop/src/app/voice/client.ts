@@ -34,6 +34,7 @@ import { FLAG_LAST, KIND_MIC, KIND_TTS, packFrame, parseFrame, type ServerMessag
 import {
   $voiceAnswer,
   $voiceConnection,
+  $voiceConversationMode,
   $voiceEchoTest,
   $voiceError,
   $voiceTranscript,
@@ -510,6 +511,7 @@ export class VoiceClient {
     this.playback.flush()
     this.setSpeakingIndicator(false)
     setAvatarListening(false)
+    $voiceConversationMode.set(false)
     $voiceTurnPhase.set('idle')
   }
 }

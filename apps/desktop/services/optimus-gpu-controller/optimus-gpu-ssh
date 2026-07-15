@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  "optimus-gpu status") mode=status ;;
+  "optimus-gpu voice") mode=voice ;;
+  "optimus-gpu image") mode=image ;;
+  "optimus-gpu llm") mode=llm ;;
+  "optimus-gpu idle") mode=idle ;;
+  *)
+    printf '%s\n' '{"ok":false,"error":"command not allowed"}'
+    exit 64
+    ;;
+esac
+
+exec /usr/local/sbin/optimus-gpu-controller "$mode"
