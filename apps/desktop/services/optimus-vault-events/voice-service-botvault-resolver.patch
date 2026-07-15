@@ -1,0 +1,13 @@
+--- voice_service.py
++++ voice_service.py
+@@
+-    # Require at least two strong-ish hits so a stray word does not open a
+-    # random vault note. Steve can still say "open BotVault" to open the pane.
+-    if best[0] < 8:
++    # A single exact filename word is enough when the utterance explicitly
++    # asked to open BotVault (for example "open SCHEMA in BotVault"). Longer
++    # queries still require two strong-ish hits so stray prose cannot select a
++    # random note. Steve can always say "open BotVault" to open only the pane.
++    minimum_score = 6 if len(tokens) == 1 else 8
++    if best[0] < minimum_score:
+         return None

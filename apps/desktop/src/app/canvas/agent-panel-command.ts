@@ -1,5 +1,6 @@
 import { translateNow } from '@/i18n'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
+import { $revealInTreeRequest } from '@/store/layout'
 import { notify } from '@/store/notifications'
 import { setCurrentSessionPreviewTarget } from '@/store/preview'
 
@@ -153,6 +154,10 @@ async function openBotVaultPath(rawPath: string): Promise<void> {
 
     return
   }
+
+  // Keep the tree and preview synchronized. ProjectTree expands each parent,
+  // selects the note, and scrolls it into view when this request arrives.
+  $revealInTreeRequest.set(path)
 
   const target = await normalizeOrLocalPreviewTarget(path, BOTVAULT_PATH)
 

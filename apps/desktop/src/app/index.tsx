@@ -1,3 +1,4 @@
+import { VaultLiveEventBridge } from './botvault/live-events'
 import { CanvasRoot } from './canvas'
 import { DesktopController } from './desktop-controller'
 
@@ -13,6 +14,7 @@ export default function App() {
     <>
       <DesktopController />
       <CanvasRoot />
+      <VaultLiveEventBridge />
     </>
   )
 }

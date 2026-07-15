@@ -9,8 +9,26 @@
  */
 
 import { $voiceServerUrl, $voiceToken } from '@/app/voice/store'
+import { openBotVaultNote } from '@/store/vault-events'
 
 import { $meetingElapsed, $meetingError, $meetingLastNote, $meetingPhase } from './store'
+
+/** Finalize a successful upload and put its durable note on the shared
+ * BotVault work surface. Preview navigation is best-effort: a saved meeting
+ * remains a success even if the pane cannot be opened during a disconnect. */
+export async function completeMeetingNote(notePath: string | null): Promise<void> {
+  $meetingLastNote.set(notePath)
+
+  if (notePath) {
+    try {
+      await openBotVaultNote(notePath)
+    } catch (error) {
+      console.warn('[meeting-recorder] saved note could not be opened in BotVault:', notePath, error)
+    }
+  }
+
+  $meetingPhase.set('idle')
+}
 
 /** ws://host:9125/voice  ->  http://host:9125/transcribe */
 function transcribeUrl(): string {
@@ -181,8 +199,7 @@ export class MeetingRecorder {
         return
       }
 
-      $meetingLastNote.set(data.note_path ?? null)
-      $meetingPhase.set('idle')
+      await completeMeetingNote(data.note_path ?? null)
     } catch (error) {
       clearTimeout(flip)
       $meetingError.set(String(error).slice(0, 200))

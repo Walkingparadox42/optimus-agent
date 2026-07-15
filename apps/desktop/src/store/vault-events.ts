@@ -196,7 +196,10 @@ export function notifyVaultNoteChanged(path: string, origin: VaultNoteOrigin): v
 // stack duplicate preview opens while the first normalize round-trip is inflight.
 const autoOpenInflight = new Set<string>()
 
-async function autoOpenNote(path: string): Promise<void> {
+/** Open a concrete BotVault note in the active workspace/canvas layout.
+ * Used by follow mode and by producers such as the meeting recorder that
+ * receive an authoritative note path after their work completes. */
+export async function openBotVaultNote(path: string): Promise<void> {
   if (autoOpenInflight.has(path)) {
     return
   }
@@ -243,5 +246,5 @@ $vaultNoteActivity.subscribe(event => {
     return
   }
 
-  void autoOpenNote(event.path)
+  void openBotVaultNote(event.path)
 })

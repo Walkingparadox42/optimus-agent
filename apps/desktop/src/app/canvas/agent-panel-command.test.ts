@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { $revealInTreeRequest } from '@/store/layout'
+
 import {
   applyOptimusCockpitPanelCommand,
   OPTIMUS_COCKPIT_PANEL_TOOL,
@@ -108,6 +110,7 @@ describe('Optimus cockpit panel command parser', () => {
 describe('applyOptimusCockpitPanelCommand', () => {
   afterEach(() => {
     $canvasMode.set(false)
+    $revealInTreeRequest.set(null)
   })
 
   it('no-ops when canvas mode is off — never a silent layout switch', () => {
@@ -140,6 +143,14 @@ describe('applyOptimusCockpitPanelCommand', () => {
 
     applyOptimusCockpitPanelCommand({ action: 'toggle', panel: 'browser' })
     expect($canvasPanels.get().browser.open).toBe(false)
+  })
+
+  it('reveals an opened BotVault note in the folder tree', () => {
+    $canvasMode.set(true)
+
+    applyOptimusCockpitPanelCommand({ action: 'open', panel: 'botvault', path: 'Optimus/SCHEMA.md' })
+
+    expect($revealInTreeRequest.get()).toBe('/mnt/vaults/BotVault/Optimus/SCHEMA.md')
   })
 })
 
