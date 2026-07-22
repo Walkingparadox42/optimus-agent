@@ -22,6 +22,8 @@ const {
   connectionScopeKey,
   cookiesHaveSession,
   cookiesHaveLiveSession,
+  defaultDesktopConnectionConfig,
+  isHermesSessionCookie,
   normAuthMode,
   normalizeRemoteBaseUrl,
   pathWithGlobalRemoteProfile,
@@ -329,6 +331,25 @@ test('cookiesHaveLiveSession is false for unrelated cookies and non-arrays', () 
   assert.equal(cookiesHaveLiveSession(null), false)
   assert.equal(cookiesHaveLiveSession(undefined), false)
   assert.equal(cookiesHaveLiveSession([]), false)
+})
+
+test('defaultDesktopConnectionConfig seeds a configured remote without removing the local upstream default', () => {
+  assert.deepEqual(defaultDesktopConnectionConfig('http://192.168.0.116:9119/'), {
+    mode: 'remote',
+    remote: { url: 'http://192.168.0.116:9119', authMode: 'oauth' },
+    profiles: {}
+  })
+  assert.deepEqual(defaultDesktopConnectionConfig(), { mode: 'local', remote: {}, profiles: {} })
+})
+
+test('isHermesSessionCookie selects only access and refresh cookie variants', () => {
+  for (const name of [...AT_COOKIE_VARIANTS, ...RT_COOKIE_VARIANTS]) {
+    assert.equal(isHermesSessionCookie({ name, value: 'credential' }), true)
+  }
+
+  assert.equal(isHermesSessionCookie({ name: 'oauth_state', value: 'keep-me' }), false)
+  assert.equal(isHermesSessionCookie({ name: 'unrelated', value: 'keep-me' }), false)
+  assert.equal(isHermesSessionCookie(null), false)
 })
 
 // --- tokenPreview ---

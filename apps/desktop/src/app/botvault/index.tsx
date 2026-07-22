@@ -1,24 +1,41 @@
 import { useStore } from '@nanostores/react'
+import { useState } from 'react'
 
 import { TreeSkeleton } from '@/components/chat/skeletons'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { useDelayedTrue } from '@/hooks/use-delayed-true'
 import { useI18n } from '@/i18n'
+import { trashDesktopPath } from '@/lib/desktop-fs'
+import { Trash2 } from '@/lib/icons'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { cn } from '@/lib/utils'
 import { $panesFlipped } from '@/store/layout'
-import { notifyError } from '@/store/notifications'
-import { $filePreviewTarget, type PreviewTarget, setCurrentSessionPreviewTarget } from '@/store/preview'
+import { notify, notifyError } from '@/store/notifications'
+import {
+  $filePreviewTarget,
+  dismissPreviewTarget,
+  type PreviewTarget,
+  setCurrentSessionPreviewTarget
+} from '@/store/preview'
 import { $vaultFollowMode, toggleVaultFollowMode } from '@/store/vault-events'
+import { notifyWorkspaceChanged } from '@/store/workspace-events'
 
 import { LocalFilePreview, PreviewEmptyState } from '../chat/right-rail/preview-file'
 import { EmptyState, RightSidebarSectionHeader } from '../right-sidebar'
 import { ProjectTree } from '../right-sidebar/files/tree'
 import { SidebarPanelLabel } from '../shell/sidebar-label'
 
-import { BOTVAULT_PATH, useVaultTree } from './use-vault-tree'
+import { BOTVAULT_PATH, isBotVaultDescendantPath, useVaultTree } from './use-vault-tree'
 
 /**
  * [Optimus Cockpit] BotVault pane — Phase 1 increment 3.
@@ -52,9 +69,7 @@ function isVaultPreviewTarget(target: PreviewTarget | null): target is PreviewTa
     return false
   }
 
-  const path = targetPath(target).replaceAll('\\', '/')
-
-  return path === BOTVAULT_PATH || path.startsWith(`${BOTVAULT_PATH}/`)
+  return isBotVaultDescendantPath(targetPath(target))
 }
 
 export function BotVaultPane({ canvasLivePreview = false, onActivateFile, onActivateFolder }: BotVaultPaneProps) {
@@ -64,7 +79,9 @@ export function BotVaultPane({ canvasLivePreview = false, onActivateFile, onActi
   const panesFlipped = useStore($panesFlipped)
   const followMode = useStore($vaultFollowMode)
   const activeFilePreview = useStore($filePreviewTarget)
-  const canvasPreviewTarget = isVaultPreviewTarget(activeFilePreview) ? activeFilePreview : null
+  const vaultPreviewTarget = isVaultPreviewTarget(activeFilePreview) ? activeFilePreview : null
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const {
     collapseAll,
@@ -92,6 +109,27 @@ export function BotVaultPane({ canvasLivePreview = false, onActivateFile, onActi
       setCurrentSessionPreviewTarget(preview, 'file-browser', path)
     } catch (error) {
       notifyError(error, r.previewUnavailable)
+    }
+  }
+
+  const deleteNote = async () => {
+    if (!pendingDelete || deleting) {
+      return
+    }
+
+    setDeleting(true)
+
+    try {
+      await trashDesktopPath(pendingDelete, BOTVAULT_PATH)
+      dismissPreviewTarget()
+      notifyWorkspaceChanged()
+      await refreshRoot()
+      notify({ durationMs: 2_000, kind: 'success', message: t.fileMenu.delete })
+      setPendingDelete(null)
+    } catch (error) {
+      notifyError(error, t.common.failed)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -151,16 +189,13 @@ export function BotVaultPane({ canvasLivePreview = false, onActivateFile, onActi
           </Button>
         </RightSidebarSectionHeader>
 
-        <div
-          className={cn(
-            'flex min-h-0 flex-1',
-            canvasLivePreview ? 'flex-col min-[44rem]:flex-row' : 'flex-col'
-          )}
-        >
+        <div className={cn('flex min-h-0 flex-1', canvasLivePreview ? 'flex-col min-[44rem]:flex-row' : 'flex-col')}>
           <div
             className={cn(
               'flex min-h-0 min-w-0 flex-col',
-              canvasLivePreview ? 'h-[45%] min-[44rem]:h-auto min-[44rem]:w-[42%] min-[44rem]:min-w-52' : 'flex-1'
+              canvasLivePreview
+                ? 'h-[45%] min-[44rem]:h-auto min-[44rem]:w-[42%] min-[44rem]:min-w-52'
+                : 'h-[45%] shrink-0'
             )}
           >
             {rootError ? (
@@ -215,20 +250,39 @@ export function BotVaultPane({ canvasLivePreview = false, onActivateFile, onActi
             )}
           </div>
 
-          {canvasLivePreview && (
-            <div className="relative min-h-0 min-w-0 flex-1 border-t border-(--ui-stroke-secondary) bg-background/60 min-[44rem]:border-l min-[44rem]:border-t-0">
-              {canvasPreviewTarget ? (
-                <LocalFilePreview reloadKey={0} target={canvasPreviewTarget} />
-              ) : (
-                <PreviewEmptyState
-                  body="Select a BotVault note or leave follow mode on while Optimus writes."
-                  title="No BotVault note selected"
-                />
-              )}
-            </div>
-          )}
+          <div
+            className={cn(
+              'relative min-h-0 min-w-0 flex-1 border-t border-(--ui-stroke-secondary) bg-background/60',
+              canvasLivePreview && 'min-[44rem]:border-l min-[44rem]:border-t-0'
+            )}
+          >
+            {vaultPreviewTarget ? (
+              <LocalFilePreview onDelete={setPendingDelete} reloadKey={0} target={vaultPreviewTarget} />
+            ) : (
+              <PreviewEmptyState
+                body="Select a BotVault note or leave follow mode on while Optimus writes."
+                title="No BotVault note selected"
+              />
+            )}
+          </div>
         </div>
       </div>
+      <Dialog onOpenChange={open => !open && !deleting && setPendingDelete(null)} open={Boolean(pendingDelete)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle icon={Trash2}>{t.fileMenu.deleteTitle(pendingDelete?.split(/[\\/]/).pop() || '')}</DialogTitle>
+            <DialogDescription>{t.fileMenu.deleteBody}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button disabled={deleting} onClick={() => setPendingDelete(null)} variant="ghost">
+              {t.common.cancel}
+            </Button>
+            <Button disabled={deleting} onClick={() => void deleteNote()} variant="destructive">
+              {deleting ? t.common.loading : t.common.delete}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   )
 }

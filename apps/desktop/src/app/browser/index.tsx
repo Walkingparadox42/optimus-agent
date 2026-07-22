@@ -1,9 +1,10 @@
 import { useStore } from '@nanostores/react'
 import RFB from '@novnc/novnc'
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
+import { writeClipboardText } from '@/components/ui/copy-button'
 import { Input } from '@/components/ui/input'
 import { Loader } from '@/components/ui/loader'
 import { useI18n } from '@/i18n'
@@ -36,6 +37,27 @@ const VNC_PASSWORD_STORAGE_KEY = 'optimus.browser.vncPassword'
 
 type ConnectionPhase = 'connected' | 'connecting' | 'idle'
 
+const CONTROL_LEFT_KEYSYM = 0xffe3
+
+function sendControlShortcut(rfb: RFB, keysym: number, code: string): void {
+  rfb.sendKey(CONTROL_LEFT_KEYSYM, 'ControlLeft', true)
+  rfb.sendKey(keysym, code, true)
+  rfb.sendKey(keysym, code, false)
+  rfb.sendKey(CONTROL_LEFT_KEYSYM, 'ControlLeft', false)
+}
+
+async function readClipboardText(): Promise<string> {
+  if (window.hermesDesktop?.readClipboard) {
+    return window.hermesDesktop.readClipboard()
+  }
+
+  if (navigator.clipboard?.readText) {
+    return navigator.clipboard.readText()
+  }
+
+  throw new Error('Clipboard API is unavailable')
+}
+
 export function BrowserPane() {
   const { t } = useI18n()
   const b = t.browserPane
@@ -47,6 +69,7 @@ export function BrowserPane() {
   // following 'disconnect' event reports a auth error instead of a generic one.
   const authFailedRef = useRef(false)
   const autoConnectAttemptedRef = useRef(false)
+  const copyRequestedRef = useRef(false)
 
   const [phase, setPhase] = useState<ConnectionPhase>('idle')
   const [error, setError] = useState<null | string>(null)
@@ -55,6 +78,55 @@ export function BrowserPane() {
   const disconnect = useCallback(() => {
     rfbRef.current?.disconnect()
   }, [])
+
+  const copyFromBrowser = useCallback(() => {
+    const rfb = rfbRef.current
+
+    if (!rfb) {
+      return
+    }
+
+    copyRequestedRef.current = true
+    rfb.focus()
+    sendControlShortcut(rfb, 0x63, 'KeyC')
+  }, [])
+
+  const pasteIntoBrowser = useCallback(async () => {
+    const rfb = rfbRef.current
+
+    if (!rfb) {
+      return
+    }
+
+    const text = await readClipboardText()
+
+    if (!text || rfbRef.current !== rfb) {
+      return
+    }
+
+    rfb.clipboardPasteFrom(text)
+    rfb.focus()
+    sendControlShortcut(rfb, 0x76, 'KeyV')
+  }, [])
+
+  const onBrowserKeyDownCapture = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!(event.ctrlKey || event.metaKey)) {
+        return
+      }
+
+      const key = event.key.toLowerCase()
+
+      if (key === 'c') {
+        copyRequestedRef.current = true
+      } else if (key === 'v') {
+        event.preventDefault()
+        event.stopPropagation()
+        void pasteIntoBrowser()
+      }
+    },
+    [pasteIntoBrowser]
+  )
 
   const connectWithPassword = useCallback(
     (nextPassword: string) => {
@@ -76,6 +148,17 @@ export function BrowserPane() {
         localStorage.setItem(VNC_PASSWORD_STORAGE_KEY, nextPassword)
         setPhase('connected')
         rfb.focus()
+      })
+
+      rfb.addEventListener('clipboard', event => {
+        const text = (event as CustomEvent<{ text?: string }>).detail?.text ?? ''
+
+        if (!copyRequestedRef.current || !text) {
+          return
+        }
+
+        copyRequestedRef.current = false
+        void writeClipboardText(text).catch(() => {})
       })
 
       rfb.addEventListener('securityfailure', () => {
@@ -149,26 +232,49 @@ export function BrowserPane() {
           ? 'border-r shadow-[inset_-0.0625rem_0_0_color-mix(in_srgb,white_18%,transparent)]'
           : 'border-l shadow-[inset_0.0625rem_0_0_color-mix(in_srgb,white_18%,transparent)]'
       )}
+      data-browser-pane=""
     >
       <RightSidebarSectionHeader>
         <div className="flex min-w-0 flex-1">
           <SidebarPanelLabel>{b.title}</SidebarPanelLabel>
         </div>
         {phase === 'connected' && (
-          <Button
-            aria-label={b.disconnect}
-            className="text-sidebar-foreground/70 hover:bg-sidebar-accent! hover:text-sidebar-accent-foreground! focus-visible:ring-sidebar-ring"
-            onClick={disconnect}
-            size="icon-xs"
-            title={b.disconnect}
-            variant="ghost"
-          >
-            <Codicon name="debug-disconnect" size="0.8125rem" />
-          </Button>
+          <>
+            <Button
+              aria-label={b.copy}
+              className="text-sidebar-foreground/70 hover:bg-sidebar-accent! hover:text-sidebar-accent-foreground! focus-visible:ring-sidebar-ring"
+              onClick={copyFromBrowser}
+              size="icon-xs"
+              title={b.copy}
+              variant="ghost"
+            >
+              <Codicon name="copy" size="0.8125rem" />
+            </Button>
+            <Button
+              aria-label={b.paste}
+              className="text-sidebar-foreground/70 hover:bg-sidebar-accent! hover:text-sidebar-accent-foreground! focus-visible:ring-sidebar-ring"
+              onClick={() => void pasteIntoBrowser()}
+              size="icon-xs"
+              title={b.paste}
+              variant="ghost"
+            >
+              <Codicon name="clippy" size="0.8125rem" />
+            </Button>
+            <Button
+              aria-label={b.disconnect}
+              className="text-sidebar-foreground/70 hover:bg-sidebar-accent! hover:text-sidebar-accent-foreground! focus-visible:ring-sidebar-ring"
+              onClick={disconnect}
+              size="icon-xs"
+              title={b.disconnect}
+              variant="ghost"
+            >
+              <Codicon name="debug-disconnect" size="0.8125rem" />
+            </Button>
+          </>
         )}
       </RightSidebarSectionHeader>
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1" onKeyDownCapture={onBrowserKeyDownCapture}>
         {/* noVNC target. Always mounted so the RFB constructor has a stable
             element; scaleViewport letterboxes the fixed 1024x768 framebuffer
             into whatever size the pane gives it. */}

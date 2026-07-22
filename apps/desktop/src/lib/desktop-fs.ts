@@ -140,9 +140,21 @@ export async function renameDesktopPath(path: string, newName: string): Promise<
   return result.path
 }
 
-// Move a file/folder to the OS trash (recoverable). Local only.
-export async function trashDesktopPath(path: string): Promise<void> {
+// Move a file/folder to recoverable trash. Remote callers must provide the
+// containing root; the backend archives the item below that root's hidden
+// `.trash` directory instead of permanently unlinking it.
+export async function trashDesktopPath(path: string, root?: string): Promise<void> {
   const desktop = bridge()
+
+  if (isDesktopFsRemoteMode()) {
+    if (!root) {
+      throw new Error('A containing root is required for remote delete')
+    }
+
+    await remoteFsApi('/api/fs/trash', { path, root })
+
+    return
+  }
 
   if (!desktop.trashPath) {
     throw new Error('Delete is not available')

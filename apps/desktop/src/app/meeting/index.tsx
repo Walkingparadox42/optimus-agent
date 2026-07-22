@@ -4,11 +4,19 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
 import { meetingRecorder } from './recorder'
-import { $meetingElapsed, $meetingError, $meetingLastNote, $meetingPhase } from './store'
+import {
+  $meetingElapsed,
+  $meetingError,
+  $meetingLastNote,
+  $meetingPhase,
+  $meetingSummaryStyle,
+  type MeetingSummaryStyle
+} from './store'
 
 /**
  * [Optimus Cockpit] Meeting recorder controls — M1.
@@ -29,19 +37,20 @@ function mmss(seconds: number): string {
 export function MeetingControls() {
   const { t } = useI18n()
   const m = t.meetingPanel
-  const promptResolverRef = useRef<null | ((value: string) => void)>(null)
+  const promptResolverRef = useRef<null | ((value: { summaryStyle: MeetingSummaryStyle; title: string }) => void)>(null)
   const [purpose, setPurpose] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const phase = useStore($meetingPhase)
   const elapsed = useStore($meetingElapsed)
   const lastNote = useStore($meetingLastNote)
   const error = useStore($meetingError)
+  const summaryStyle = useStore($meetingSummaryStyle)
 
   const recording = phase === 'recording'
   const busy = phase === 'uploading' || phase === 'transcribing'
 
   const requestPurpose = () =>
-    new Promise<string>(resolve => {
+    new Promise<{ summaryStyle: MeetingSummaryStyle; title: string }>(resolve => {
       setPurpose('')
       setPromptOpen(true)
       promptResolverRef.current = resolve
@@ -51,7 +60,7 @@ export function MeetingControls() {
     const resolve = promptResolverRef.current
     promptResolverRef.current = null
     setPromptOpen(false)
-    resolve?.(value.trim())
+    resolve?.({ summaryStyle, title: value.trim() })
   }
 
   const label =
@@ -98,6 +107,24 @@ export function MeetingControls() {
             placeholder={m.purposePlaceholder}
             value={purpose}
           />
+          <label className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-secondary)">
+            {m.summaryStyle}
+          </label>
+          <Select
+            onValueChange={value => $meetingSummaryStyle.set(value as MeetingSummaryStyle)}
+            value={summaryStyle}
+          >
+            <SelectTrigger className="w-full" size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="interview">{m.summaryStyleInterview}</SelectItem>
+              <SelectItem value="meeting">{m.summaryStyleMeeting}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+            {summaryStyle === 'interview' ? m.summaryStyleInterviewHint : m.summaryStyleMeetingHint}
+          </p>
           <div className="flex gap-1.5">
             <Button className="flex-1" size="sm" type="submit" variant="secondary">
               {m.useContext}

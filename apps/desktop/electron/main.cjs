@@ -110,6 +110,8 @@ const {
   connectionScopeKey,
   cookiesHaveSession,
   cookiesHaveLiveSession,
+  defaultDesktopConnectionConfig,
+  isHermesSessionCookie,
   normAuthMode,
   normalizeRemoteBaseUrl,
   pathWithGlobalRemoteProfile,
@@ -414,6 +416,12 @@ const BOOT_FAKE_STEP_MS = (() => {
   return Math.max(120, raw)
 })()
 const APP_NAME = 'Hermes'
+// [Optimus Cockpit] The product is a client for CT115. A fresh dev profile or
+// packaged install must not silently launch a Windows-local Hermes: that host
+// cannot reach BotVault and is not the Optimus system of record. This only
+// seeds a missing/malformed connection.json; an explicit saved Local choice
+// remains available and continues to win.
+const OPTIMUS_DEFAULT_REMOTE_GATEWAY = 'http://192.168.0.116:9119'
 const TITLEBAR_HEIGHT = 34
 const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
 const WINDOW_BUTTON_POSITION = {
@@ -4442,13 +4450,13 @@ async function hasLiveOauthSession(baseUrl) {
   }
 }
 
-async function clearOauthSession(baseUrl) {
+async function clearOauthSession(baseUrl, options = {}) {
   const sess = getOauthSession()
   if (!sess) return
   try {
     const cookies = await sess.cookies.get(baseUrl ? { url: baseUrl } : {})
     await Promise.all(
-      cookies.map(c => {
+      cookies.filter(c => !options.sessionOnly || isHermesSessionCookie(c)).map(c => {
         const scheme = c.secure ? 'https' : 'http'
         const cookieUrl = `${scheme}://${c.domain.replace(/^\./, '')}${c.path || '/'}`
         return sess.cookies.remove(cookieUrl, c.name).catch(() => undefined)
@@ -4464,7 +4472,14 @@ async function clearOauthSession(baseUrl) {
 // reject if the user closes the window first. The window navigates through the
 // IDP and back to /auth/callback, which sets the session cookies on the
 // partition; we poll the cookie jar rather than try to read the HttpOnly value.
-function openOauthLoginWindow(baseUrl) {
+async function openOauthLoginWindow(baseUrl) {
+  // A stale/revoked cookie is still physically present until Max-Age elapses.
+  // Without clearing it, the poll below sees that old AT immediately, declares
+  // login complete, and destroys the window before the user can authenticate.
+  // Remove only Hermes credentials; keep provider/SSO cookies so re-login can
+  // still use the identity provider's normal remembered-session flow.
+  await clearOauthSession(baseUrl, { sessionOnly: true })
+
   return new Promise((resolve, reject) => {
     if (!app.isReady()) {
       reject(new Error('Desktop is not ready to start an OAuth login.'))
@@ -4734,7 +4749,7 @@ function readDesktopConnectionConfig() {
     return connectionConfigCache
   }
 
-  let config = { mode: 'local', remote: {}, profiles: {} }
+  let config = defaultDesktopConnectionConfig(OPTIMUS_DEFAULT_REMOTE_GATEWAY)
 
   try {
     const raw = fs.readFileSync(DESKTOP_CONNECTION_CONFIG_PATH, 'utf8')
@@ -6662,6 +6677,8 @@ ipcMain.handle('hermes:writeClipboard', (_event, text) => {
   clipboard.writeText(String(text || ''))
   return true
 })
+
+ipcMain.handle('hermes:readClipboard', () => clipboard.readText())
 
 ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || '')))
 

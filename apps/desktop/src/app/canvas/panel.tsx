@@ -23,11 +23,17 @@ import {
 
 import { Codicon } from '@/components/ui/codicon'
 
-import { CANVAS_TOP_INSET, clampRectToViewport } from './auto-arrange'
+import {
+  CANVAS_TOP_INSET,
+  type CanvasResizeDir,
+  clampRectToViewport,
+  resizeCanvasRect
+} from './auto-arrange'
 import { type CanvasPanelId, type CanvasRect, dismissPanel, focusPanel, setPanelRect } from './store'
 
 type PanelStage = 'dismissing' | 'open' | 'summoning'
-type ResizeDir = 'e' | 's' | 'se'
+
+const RESIZE_DIRECTIONS: readonly CanvasResizeDir[] = ['n', 'e', 's', 'w', 'ne', 'se', 'sw', 'nw']
 
 interface CanvasPanelProps {
   children: ReactNode
@@ -157,13 +163,9 @@ export function CanvasPanel({
   )
 
   const startResize = useCallback(
-    (event: ReactPointerEvent, dir: ResizeDir) => {
+    (event: ReactPointerEvent, dir: CanvasResizeDir) => {
       event.stopPropagation()
-      runGesture(event, (start, dx, dy) => ({
-        ...start,
-        w: dir === 's' ? start.w : Math.max(minWidth, start.w + dx),
-        h: dir === 'e' ? start.h : Math.max(minHeight, start.h + dy)
-      }))
+      runGesture(event, (start, dx, dy) => resizeCanvasRect(start, dx, dy, dir, minWidth, minHeight))
     },
     [minHeight, minWidth, runGesture]
   )
@@ -201,9 +203,15 @@ export function CanvasPanel({
         </div>
       </div>
 
-      <div className="canvas-resize" data-dir="e" onPointerDown={e => startResize(e, 'e')} />
-      <div className="canvas-resize" data-dir="s" onPointerDown={e => startResize(e, 's')} />
-      <div className="canvas-resize" data-dir="se" onPointerDown={e => startResize(e, 'se')} />
+      {RESIZE_DIRECTIONS.map(dir => (
+        <div
+          aria-hidden="true"
+          className="canvas-resize"
+          data-dir={dir}
+          key={dir}
+          onPointerDown={event => startResize(event, dir)}
+        />
+      ))}
     </section>
   )
 }

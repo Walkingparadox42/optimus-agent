@@ -821,6 +821,8 @@ export interface Translations {
     passwordPlaceholder: string
     connect: string
     connecting: string
+    copy: string
+    paste: string
     disconnect: string
     authFailed: string
     lost: string
@@ -855,6 +857,11 @@ export interface Translations {
     prompting: string
     purposePrompt: string
     purposePlaceholder: string
+    summaryStyle: string
+    summaryStyleInterview: string
+    summaryStyleInterviewHint: string
+    summaryStyleMeeting: string
+    summaryStyleMeetingHint: string
     useContext: string
     skipContext: string
     saved: string

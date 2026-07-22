@@ -3100,3 +3100,276 @@ Verification:
 - Final live state: CT115 `hermes-gateway.service`, `hermes-dashboard`, and
   `optimus-voice-service` active; CT119 `optimus-browser-bridge` active and
   healthy.
+
+---
+
+## 2026-07-16 - Reversible candidate-focused interview summaries
+
+Observed failure: a 15-minute full-stack developer interview contained a
+substantive RAG-restructuring answer, but the generic meeting summary reduced
+it to the equivalent of "the candidate answered the RAG question." The raw
+transcript was accurate; the loss happened only in the Hermes summary prompt.
+
+Root cause and constraint:
+
+- The original M2 prompt prioritized generic Overview / Decisions / Action
+  Items and never instructed Hermes to preserve the substance of interviewee
+  answers.
+- Meeting context was authoritative framing, which could over-weight Steve's
+  interviewer questions.
+- Faster-whisper still produces no speaker diarization. The new profile may
+  infer question/answer flow when reasonably clear, but must mark uncertain
+  attribution and must never invent speaker identity.
+
+Implemented two isolated summary profiles:
+
+- `Interview — candidate focused` (new default on first use): one subsection
+  per substantive question/topic, capturing the candidate's actual approach,
+  reasoning, tradeoffs, concrete technologies/examples/metrics, caveats,
+  strengths, concerns/gaps, and targeted follow-ups. It explicitly forbids
+  empty statements such as "the candidate answered the RAG question" and
+  requires every assessment to point to transcript evidence.
+- `Standard meeting` (rollback): preserves the original M2 Context / Overview /
+  Decisions / Action Items / Open Questions / Notable Details structure and
+  original attribution instruction. Missing or invalid styles also fall back
+  to `meeting` server-side.
+
+The recorder's existing post-stop context dialog now contains a Summary style
+selector. The choice persists locally, so switching to Standard Meeting is an
+immediate behavioral rollback for that recording and future recordings; no
+code revert or service restart is needed.
+
+Isolation guarantees:
+
+- Audio capture, upload, faster-whisper transcription, durable initial note
+  write, BotVault destination, full Transcript preservation, and automatic
+  note opening are unchanged.
+- The renderer only adds `summary_style=interview|meeting` to the existing
+  `/transcribe` request.
+- CT115 normalizes the query value and selects a prompt from the standalone
+  `/opt/optimus-voice-service/meeting_summary.py` module.
+
+Deployment and rollback artifacts:
+
+- CT115 `voice_service.py` patched to route the selected style.
+- New deployed files: `meeting_summary.py`, `test_meeting_summary.py`.
+- Pre-change backup:
+  `/opt/optimus-voice-service/voice_service.py.bak-20260716-interview-summaries`.
+- `optimus-voice-service` restarted and active.
+
+Verification:
+
+- Prompt unit tests: 3/3 passed locally and on CT115, including invalid-style
+  fallback to Standard Meeting and shared transcript-preservation rules.
+- Renderer recorder tests: 3/3 passed, including exact forwarding of both
+  `interview` and `meeting` styles to the unchanged `/transcribe` endpoint.
+- Desktop typecheck passed.
+- ESLint passed with no new errors (only the known unrelated
+  `model-settings.tsx:412` warning).
+- Desktop production build passed.
+
+---
+
+## 2026-07-17 - Piper Prime replaces Voicebox for normal voice synthesis
+
+CT115 now runs the public Biofects Prime Piper model as the primary TTS voice.
+This removes the normal voice path's dependency on CT120 Voicebox/Chatterbox
+Turbo and its approximately 4.5-4.8 GB warmed VRAM residency.
+
+Deployment:
+
+- Piper model:
+  `/opt/optimus-voice-service/voices/biofects_prime.onnx`
+- Matching config:
+  `/opt/optimus-voice-service/voices/biofects_prime.onnx.json`
+- Model SHA-256:
+  `092e52ffff8773f72ada30599c950a0d076e08dd71cd515e4d5c0505fa0b1dba`
+- Config SHA-256:
+  `161eaf586ff4d59486185cfca64954a118d39617c8cd5f2984fefe17e26237eb`
+- Source release:
+  `https://github.com/biofects/piper-voice/releases/tag/v1.0.0`
+- CT115's active `piper.conf` selects `OPTIMUS_TTS_ENGINE=piper` and sets
+  `OPTIMUS_PIPER_VOICE` to the model above. All `OPTIMUS_VOICEBOX_*`
+  environment settings and the dormant `VoiceboxEngine` implementation were
+  removed from the active service.
+- The retired CT115 Voicebox code and configuration are archived under
+  `/opt/optimus-voice-service/retired/voicebox-20260717/`.
+- The shared GPU controller was switched to `idle`; CT120 Voicebox, ComfyUI,
+  and CT102 Bonsai are stopped and disabled. Reported GPU memory dropped from
+  5,434 MB to 1 MB.
+
+Verification:
+
+- Piper 1.4.2 loaded the 114,204,023-byte ONNX model successfully on CT115.
+- Direct CLI synthesis produced valid mono PCM WAV at 22,050 Hz.
+- `/healthz` reports `tts_engine: piper`.
+- The complete deployed `smoke_test.py` suite passed twice, including real
+  STT -> Hermes -> Prime TTS audio, streaming sequence integrity, transcript
+  gating, cancellation, and mid-speech barge-in.
+- The final full smoke pass was run after CT120 Voicebox was stopped, proving
+  that the voice path is independent of CT120.
+
+### 2026-07-17 Voicebox retirement
+
+- Urithiru's GPU controller, restricted SSH allowlist, CT115 client, and
+  deployed Hermes skill now expose only `image`, `llm`, and `idle`. The
+  controller no longer probes, starts, stops, or expects a Voicebox unit.
+- The reduced controller passed all six local contract tests. Live acceptance
+  passed both before and after removal: ComfyUI returned system stats, Bonsai
+  completed a real inference, and idle released VRAM to 1 MB.
+- CT120's disabled `voicebox.service`, dedicated `voicebox` account, and
+  `/opt/voicebox` installation were removed. CT120 storage fell from 83 GB
+  used to 65 GB used (approximately 18 GB reclaimed).
+- The private profiles, generated samples, database, backend settings, unit,
+  original setup records, git revision, remotes, and storage manifest are
+  retained in CT120's root-only
+  `/root/voicebox-retired-20260717/` archive. The 40 MB data archive SHA-256 is
+  `e9f2233842ba1632541efe854035158c51aba41d3fe3fe0173b49be3a59d5b50`.
+- Urithiru controller backups:
+  `/usr/local/sbin/optimus-gpu-controller.bak-20260717-remove-voicebox` and
+  `/usr/local/sbin/optimus-gpu-ssh.bak-20260717-remove-voicebox`.
+- CT115 GPU client/skill backups use the suffix
+  `.bak-20260717-remove-voicebox`.
+- Final post-removal `smoke_test.py` passed every voice, streaming, transcript
+  gating, cancellation, and barge-in check with CT120 Voicebox absent.
+
+Restoring Voicebox now requires an explicit reinstall from the recorded source
+revision and retirement archive; there is intentionally no active one-command
+rollback that can silently reintroduce the retired GPU workload.
+
+---
+
+## 2026-07-18 - Complete Browser viewport and two-way clipboard
+
+Observed failure: the Browser canvas pane consistently cut off the bottom of
+websites. A Stalwart account page showed only the top slivers of its Delete,
+Cancel, and Save buttons and omitted the bottom-left navigation icons, while
+the same page in Steve's normal browser showed all of them.
+
+The first renderer-only diagnosis was incorrect. Removing the canvas's
+duplicate titlebar inset recovered 34 px of pane space, but refitting noVNC
+could not reveal pixels that CT119 never exported. Screenshot comparison plus
+live `xwininfo` established the actual invariant violation:
+
+- Xvfb exported a fixed 1024x768 desktop.
+- CT119's Playwright bridge requested a 1024x768 **page viewport**.
+- Firefox then added 85 px of tabs/address-bar chrome. Its live outer window
+  was therefore 1024x853 at `+0+0`, extending 85 px below the Xvfb root window.
+- x11vnc/noVNC correctly exported all 1024x768 available pixels; the missing
+  website controls were in the off-screen portion of Firefox, not clipped by
+  Electron.
+
+CT119 fix:
+
+- `/opt/optimus-browser-bridge/bridge.py` now uses a 1024x683 Playwright page
+  viewport. With Firefox's measured 85 px chrome, the live outer window is
+  exactly 1024x768 and fits the exported X display pixel-for-pixel.
+- `optimus-browser-bridge` was restarted. `optimus-xvfb`, `optimus-x11vnc`,
+  `optimus-novnc`, and `optimus-browser-bridge` are all active.
+- Post-fix `xwininfo` reports the Navigator window as `1024x768+0+0`; the
+  bridge health endpoint returns `ok`.
+- The bridge then navigated back to Steve's exact Stalwart URL from the
+  reference screenshot (`.../admin/Management/x:Account/User/b`); it returned
+  title `Portal` while the outer Firefox window remained `1024x768+0+0`.
+- Rollback copy:
+  `/opt/optimus-browser-bridge/bridge.py.bak-20260718-fit-firefox-window`.
+
+Desktop clipboard bridge:
+
+- Browser header now has explicit Copy and Paste controls.
+- Copy sends Ctrl+C to the currently focused remote Firefox selection and
+  writes the resulting noVNC `clipboard` event into the host OS clipboard.
+- Paste reads the host OS clipboard through a new Electron IPC bridge, sends
+  it through `RFB.clipboardPasteFrom()`, and sends Ctrl+V to the focused remote
+  control. This supports URLs and general Unicode text in both directions.
+- Ctrl+C inside the noVNC canvas is also tracked so ordinary keyboard copying
+  updates the host clipboard; Ctrl+V is intercepted before noVNC can paste a
+  stale remote clipboard and routes through the same host-to-remote path.
+- The canvas-only `--titlebar-height: 0px` cleanup remains, reclaiming the
+  redundant docked-pane inset without changing the docked Browser layout.
+
+Verification:
+
+- Live CT119 window geometry and all four services verified after restart.
+- Browser/canvas Vitest suite: 27/27 passed. Renderer regressions cover
+  local-to-remote paste and remote-to-local copy, including the exact RFB key
+  sequences.
+- Desktop TypeScript typecheck passed.
+- Focused renderer/Electron lint and CommonJS syntax checks passed.
+- Desktop production build and post-build artifact validation passed.
+
+---
+
+## 2026-07-22 - Cockpit remote routing, BotVault preview, read-aloud, and panel resizing
+
+Several symptoms that initially looked unrelated shared one architectural
+boundary: the cockpit is a CT115 client, while the Electron renderer can also
+launch a Windows-local Hermes. Optimus, BotVault, and the Prime Piper voice all
+live on CT115, so silently using Local mode produces superficially functional
+chat UI with the wrong filesystem and profile-scoped services.
+
+### Remote gateway and OAuth recovery
+
+- Confirmed the production desktop connection targets CT115 at
+  `http://192.168.0.116:9119` using OAuth.
+- Found an explicit re-login race: an unexpired but revoked Hermes access
+  cookie remained in Electron's persistent OAuth partition. The login poll saw
+  that stale cookie immediately, closed the login window as if authentication
+  had succeeded, and boot then failed while minting a WebSocket ticket.
+- Explicit sign-in now removes only Hermes access/refresh session cookies
+  before opening `/login`. Provider/SSO cookies are preserved, so remembered
+  identity-provider sessions still work.
+- A missing or malformed `connection.json` in this Optimus fork now seeds the
+  CT115 OAuth gateway instead of Local mode. An explicitly saved Local choice
+  remains available and still wins; the change only fixes the fresh/default
+  policy.
+- Live verification after restart showed `Connecting to remote Hermes backend
+  at http://192.168.0.116:9119` followed by `Remote Hermes backend is ready`,
+  with no new BotVault read error.
+- CT115 was also checked directly: `hermes-dashboard.service` was active,
+  `/api/status` returned HTTP 200, and `/mnt/vaults/BotVault` was mounted and
+  readable. A short external HTTP/SSH responsiveness episode recovered without
+  a service or container restart.
+
+### BotVault and remote preview routing
+
+- The BotVault root directory was being accepted as a file preview target,
+  producing `Path points to a directory`. Preview eligibility now requires a
+  real descendant below `/mnt/vaults/BotVault`; the root itself remains a tree
+  directory only.
+- Text preview, data URL, delete, write, default-CWD, and related desktop file
+  operations use the connected remote gateway when the active connection is
+  remote. This prevents Electron-local `hermes:readFileText` from trying to
+  open CT115-only paths and reporting a misleading local `ENOENT`.
+
+### Read aloud and Prime voice
+
+- Desktop `transcribeAudio`, `speakText`, and ElevenLabs voice discovery now
+  include the active profile scope, matching the rest of the remote API
+  routing. Read aloud therefore reaches the Optimus profile instead of the
+  unscoped/default TTS configuration.
+- CT115's dashboard service receives the Prime Piper package through the
+  deployed `optimus-piper.conf` `PYTHONPATH` drop-in. Direct Hermes synthesis
+  completed with provider `piper` and the Biofects Prime model.
+
+### Canvas resizing
+
+- Floating cockpit panes now expose all eight resize directions: four edges
+  and four corners. The hit areas were enlarged while keeping resize geometry
+  clamped to the canvas and each pane's minimum size.
+- Pure geometry tests cover north/west origin movement, corner resizing, and
+  minimum-size clamping.
+
+Verification:
+
+- Desktop connection/OAuth helper tests: 52/52 passed.
+- BotVault tree, profile-scope, desktop filesystem, canvas geometry, meeting,
+  and browser tests passed in their focused runs.
+- Desktop TypeScript typecheck and focused ESLint passed.
+- Desktop production compilation and artifact validation passed.
+
+Packaging note: creating a normal Windows installer is still desirable for a
+stable daily launch, but packaging is deliberately deferred until the current
+production renderer's generated `__reExport$1 is not defined` runtime failure
+is fixed. The development renderer is working; shipping that known bundle
+failure inside an `.exe` would only make it harder to diagnose.

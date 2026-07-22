@@ -3,15 +3,15 @@ set -eu
 
 mode="${1:-status}"
 case "$mode" in
-  status|voice|image|llm|idle) ;;
+  status|image|llm|idle) ;;
   *)
-    echo "usage: optimus-gpu {status|voice|image|llm|idle}" >&2
+    echo "usage: optimus-gpu {status|image|llm|idle}" >&2
     exit 64
     ;;
 esac
 
 if [ "$#" -gt 1 ]; then
-  echo "usage: optimus-gpu {status|voice|image|llm|idle}" >&2
+  echo "usage: optimus-gpu {status|image|llm|idle}" >&2
   exit 64
 fi
 

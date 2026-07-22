@@ -20,9 +20,11 @@ declare module '@novnc/novnc' {
 
   export default class RFB extends EventTarget {
     constructor(target: Element, urlOrChannel: string | WebSocket, options?: NoVncOptions)
+    clipboardPasteFrom(text: string): void
     disconnect(): void
     focus(options?: FocusOptions): void
     blur(): void
+    sendKey(keysym: number, code: string, down?: boolean): void
     background: string
     clipViewport: boolean
     resizeSession: boolean

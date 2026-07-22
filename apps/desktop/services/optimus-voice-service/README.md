@@ -42,6 +42,9 @@ implausible for the audio duration while preserving plausible short replies.
 
 ## Deployed files on CT115
 
+- `/etc/systemd/system/optimus-voice-service.service.d/piper.conf`
+- `/opt/optimus-voice-service/voices/biofects_prime.onnx`
+- `/opt/optimus-voice-service/voices/biofects_prime.onnx.json`
 - `/opt/optimus-voice-service/botvault_voice.py`
 - `/opt/optimus-voice-service/conversation_mode.py`
 - `/opt/optimus-voice-service/transcript_gate.py`
@@ -66,6 +69,29 @@ hide, dismiss, or put away Chat, BotVault, and Browser are treated as direct UI
 intent. Any shared CT119 browser activity also summons the Browser pane at
 tool start so the work is visible while it happens.
 
+## Reversible meeting-summary profiles
+
+The recorder's stop dialog includes a persistent Summary style selector:
+
+- `Interview — candidate focused` preserves the substance of the candidate's
+  answers per question: approach, reasoning, tradeoffs, concrete specifics,
+  strengths, gaps, and recommended follow-ups. It forbids empty statements
+  such as "the candidate answered the RAG question."
+- `Standard meeting` is the rollback profile. It retains the original M2
+  Overview / Decisions / Action Items / Open Questions / Notable Details
+  structure.
+
+Only the Hermes summary prompt changes. Audio capture, batch transcription,
+the initial durable note write, full Transcript preservation, BotVault path,
+and automatic note opening are shared by both profiles. An invalid or absent
+`summary_style` query value falls back to `meeting` server-side.
+
+Deployed CT115 artifacts:
+
+- `/opt/optimus-voice-service/meeting_summary.py`
+- `/opt/optimus-voice-service/test_meeting_summary.py`
+- `/opt/optimus-voice-service/voice_service.py.bak-20260716-interview-summaries`
+
 ## Verification
 
 ```bash
@@ -74,5 +100,6 @@ venv/bin/python -m unittest -v test_botvault_voice.py test_conversation_mode.py 
 venv/bin/python smoke_botvault.py
 venv/bin/python smoke_conversation_mode.py
 venv/bin/python smoke_canvas_panes.py
+venv/bin/python -m unittest -v test_meeting_summary.py
 venv/bin/python smoke_test.py
 ```

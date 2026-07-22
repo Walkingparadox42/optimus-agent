@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { autoArrangeRects, CANVAS_MARGIN, CANVAS_TOP_INSET, clampRectToViewport } from './auto-arrange'
+import {
+  autoArrangeRects,
+  CANVAS_MARGIN,
+  CANVAS_TOP_INSET,
+  clampRectToViewport,
+  resizeCanvasRect
+} from './auto-arrange'
 import type { CanvasPanelId, CanvasRect } from './store'
 
 const VIEWPORT = { w: 1600, h: 900 }
@@ -66,5 +72,25 @@ describe('clampRectToViewport', () => {
     const clamped = clampRectToViewport({ x: 100, y: -400, w: 400, h: 300 }, VIEWPORT)
 
     expect(clamped.y).toBeGreaterThanOrEqual(CANVAS_TOP_INSET - 20)
+  })
+})
+
+describe('resizeCanvasRect', () => {
+  const start = { x: 100, y: 120, w: 400, h: 300 }
+
+  it('resizes from every edge while anchoring the opposite edge', () => {
+    expect(resizeCanvasRect(start, -50, 0, 'w', 240, 160)).toEqual({ x: 50, y: 120, w: 450, h: 300 })
+    expect(resizeCanvasRect(start, 50, 0, 'e', 240, 160)).toEqual({ x: 100, y: 120, w: 450, h: 300 })
+    expect(resizeCanvasRect(start, 0, -40, 'n', 240, 160)).toEqual({ x: 100, y: 80, w: 400, h: 340 })
+    expect(resizeCanvasRect(start, 0, 40, 's', 240, 160)).toEqual({ x: 100, y: 120, w: 400, h: 340 })
+  })
+
+  it('resizes corners on both axes', () => {
+    expect(resizeCanvasRect(start, -30, -20, 'nw', 240, 160)).toEqual({ x: 70, y: 100, w: 430, h: 320 })
+    expect(resizeCanvasRect(start, 30, 20, 'se', 240, 160)).toEqual({ x: 100, y: 120, w: 430, h: 320 })
+  })
+
+  it('keeps the opposite edges fixed when minimum size is reached', () => {
+    expect(resizeCanvasRect(start, 500, 500, 'nw', 240, 160)).toEqual({ x: 260, y: 260, w: 240, h: 160 })
   })
 })

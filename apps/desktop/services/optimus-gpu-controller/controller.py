@@ -32,14 +32,10 @@ STATE_PATH = Path("/var/lib/optimus-gpu-controller/state.json")
 SERVICES = {
     "llm": {"ct": "102", "unit": "bonsai.service"},
     "image": {"ct": "120", "unit": "comfyui.service"},
-    "voice": {"ct": "120", "unit": "voicebox.service"},
 }
-MODES = ("voice", "image", "llm", "idle")
+MODES = ("image", "llm", "idle")
 
 DEFAULT_CONFIG = {
-    "voicebox_url": "http://192.168.0.120:17493",
-    "voicebox_profile_id": "081fdf0f-c4ef-4b19-900c-5fa6d189661f",
-    "voicebox_engine": "chatterbox_turbo",
     "comfyui_url": "http://192.168.0.120:8188/system_stats",
     "bonsai_url": "http://192.168.0.102:18080/health",
     "bonsai_completion_url": "http://192.168.0.102:18080/v1/chat/completions",
@@ -231,25 +227,6 @@ def ready_target(mode: str, config: dict[str, Any]) -> dict[str, Any]:
     if mode == "image":
         wait_for_http(str(config["comfyui_url"]), timeout)
         return {"check": "comfyui-system-stats", "ready": True}
-    if mode == "voice":
-        base_url = str(config["voicebox_url"]).rstrip("/")
-        wait_for_http(f"{base_url}/health", timeout)
-        content_type, body = request_bytes(
-            f"{base_url}/generate/stream",
-            timeout=timeout,
-            payload={
-                "profile_id": config["voicebox_profile_id"],
-                "text": "GPU voice mode ready.",
-                "language": "en",
-                "engine": config["voicebox_engine"],
-                "normalize": False,
-            },
-        )
-        if len(body) < 1024 or ("audio" not in content_type and not body.startswith(b"RIFF")):
-            raise ControllerError(
-                f"Voicebox warm-up returned non-audio content ({content_type}, {len(body)} bytes)"
-            )
-        return {"check": "voicebox-generation", "ready": True, "audio_bytes": len(body)}
     return {"check": "all-services-stopped", "ready": True}
 
 

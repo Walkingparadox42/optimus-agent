@@ -1,10 +1,11 @@
 ---
 name: optimus-gpu-mode
 description: |
-  Switch or inspect the shared Urithiru RTX 3060 used by Voicebox, ComfyUI,
-  and Bonsai. Use when the user asks to start, stop, call up, fire up, switch
-  to, or check any of those GPU workloads, asks what is using GPU/VRAM, or
-  begins a task that requires Voicebox, image generation, or local Bonsai.
+  Switch or inspect the shared Urithiru RTX 3060 used by ComfyUI and Bonsai.
+  Use when the user asks to start, stop, call up, fire up, switch to, or check
+  either GPU workload, asks what is using GPU/VRAM, or begins an image
+  generation or local Bonsai task. Voice synthesis runs independently through
+  Piper Prime on CT115 CPU and does not use this controller.
 ---
 
 # Optimus GPU modes
@@ -13,7 +14,6 @@ The RTX 3060 is an exclusive shared resource. Use the local CT115 command only:
 
 ```bash
 optimus-gpu status
-optimus-gpu voice
 optimus-gpu image
 optimus-gpu llm
 optimus-gpu idle
@@ -21,7 +21,6 @@ optimus-gpu idle
 
 Mode mapping:
 
-- `voice`: Voicebox / Chatterbox Turbo on CT120.
 - `image`: ComfyUI on CT120.
 - `llm`: Bonsai 27B on CT102.
 - `idle`: stop and disable every GPU-heavy service.
@@ -30,14 +29,13 @@ Mode mapping:
 
 1. For status questions, run `optimus-gpu status` and report the returned mode,
    active services, and VRAM use.
-2. A direct request such as "fire up Voicebox", "switch to image mode", or
-   "free the GPU" is authorization to run the matching command immediately.
-3. When the user starts an image, Voicebox, or Bonsai task and the required
-   mode is not active, state briefly that the GPU is switching, then run the
-   matching command.
+2. A direct request such as "switch to image mode", "start Bonsai", or "free
+   the GPU" is authorization to run the matching command immediately.
+3. When the user starts an image or Bonsai task and the required mode is not
+   active, state briefly that the GPU is switching, then run the matching
+   command.
 4. A successful switch is not proven until the JSON response has `"ok": true`
-   and the requested service is active. Voice mode additionally performs a real
-   audio generation; it does not rely on an open port alone.
+   and the requested service is active.
 5. If a command returns `"ok": false`, report the error and current mode. Do not
    claim the requested workload is ready.
 6. Never bypass this controller with raw SSH, `pct`, `systemctl`, process kills,

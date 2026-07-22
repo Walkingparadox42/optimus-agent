@@ -203,6 +203,15 @@
   overflow: hidden;
 }
 
+/* Docked sidebar panes reserve the app titlebar at their own top edge. A
+   floating canvas plate already sits below that band, so inheriting the same
+   34px reservation shrinks the noVNC viewport and makes its fit needlessly
+   short. Keep the docked Browser behavior unchanged and remove the duplicate
+   inset only when it is hosted inside a canvas panel. */
+.canvas-panel-body [data-browser-pane] {
+  --titlebar-height: 0px;
+}
+
 /* ── Resize handles ─────────────────────────────────────────────────────── */
 
 .canvas-resize {
@@ -211,28 +220,68 @@
   touch-action: none;
 }
 
-.canvas-resize[data-dir='e'] {
+.canvas-resize[data-dir='e'],
+.canvas-resize[data-dir='w'] {
   top: var(--canvas-chamfer);
   bottom: var(--canvas-chamfer);
-  right: -3px;
-  width: 7px;
+  width: 14px;
   cursor: col-resize;
 }
 
+.canvas-resize[data-dir='e'] {
+  right: -7px;
+}
+
+.canvas-resize[data-dir='w'] {
+  left: -7px;
+}
+
+.canvas-resize[data-dir='n'],
 .canvas-resize[data-dir='s'] {
   left: var(--canvas-chamfer);
   right: var(--canvas-chamfer);
-  bottom: -3px;
-  height: 7px;
+  height: 14px;
   cursor: row-resize;
 }
 
-.canvas-resize[data-dir='se'] {
-  right: -3px;
-  bottom: -3px;
-  width: 18px;
-  height: 18px;
+.canvas-resize[data-dir='n'] {
+  top: -7px;
+}
+
+.canvas-resize[data-dir='s'] {
+  bottom: -7px;
+}
+
+.canvas-resize[data-dir='ne'],
+.canvas-resize[data-dir='nw'],
+.canvas-resize[data-dir='se'],
+.canvas-resize[data-dir='sw'] {
+  width: 24px;
+  height: 24px;
+}
+
+.canvas-resize[data-dir='ne'] {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.canvas-resize[data-dir='nw'] {
+  top: -7px;
+  left: -7px;
   cursor: nwse-resize;
+}
+
+.canvas-resize[data-dir='se'] {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
+.canvas-resize[data-dir='sw'] {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
 }
 
 /* ── Motion: transformation-adjacent deploy/stow ────────────────────────── */

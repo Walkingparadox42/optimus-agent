@@ -2,13 +2,25 @@ import { describe, expect, it } from 'vitest'
 
 import type { TreeNode } from '../right-sidebar/files/use-project-tree'
 
-import { mergeEntries, patchNode } from './use-vault-tree'
+import { BOTVAULT_PATH, isBotVaultDescendantPath, mergeEntries, patchNode } from './use-vault-tree'
 
 const node = (id: string, over: Partial<TreeNode> = {}): TreeNode => ({
   id,
   isDirectory: false,
   name: id.split('/').pop() ?? id,
   ...over
+})
+
+describe('isBotVaultDescendantPath', () => {
+  it('rejects the vault directory itself so it cannot enter the file preview', () => {
+    expect(isBotVaultDescendantPath(BOTVAULT_PATH)).toBe(false)
+    expect(isBotVaultDescendantPath(`${BOTVAULT_PATH}/`)).toBe(false)
+  })
+
+  it('accepts descendants without accepting sibling prefix collisions', () => {
+    expect(isBotVaultDescendantPath(`${BOTVAULT_PATH}/Optimus/note.md`)).toBe(true)
+    expect(isBotVaultDescendantPath(`${BOTVAULT_PATH}Backup/note.md`)).toBe(false)
+  })
 })
 
 describe('patchNode', () => {

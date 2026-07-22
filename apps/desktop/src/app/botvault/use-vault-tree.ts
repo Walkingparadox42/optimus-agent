@@ -28,6 +28,15 @@ import type { TreeNode } from '../right-sidebar/files/use-project-tree'
  *  (confirmed by Steve 2026-07-05; see OPTIMUS.md increment 3). */
 export const BOTVAULT_PATH = '/mnt/vaults/BotVault'
 
+/** Whether a path is an item below the vault root. The root itself is a
+ * directory and must never be handed to LocalFilePreview as a file target. */
+export function isBotVaultDescendantPath(path: string): boolean {
+  const normalizedPath = path.replaceAll('\\', '/').replace(/\/+$/, '')
+  const normalizedRoot = BOTVAULT_PATH.replace(/\/+$/, '')
+
+  return normalizedPath.startsWith(`${normalizedRoot}/`)
+}
+
 const ROOT_ERROR_RETRY_MS = 3_000
 const PLACEHOLDER_ID = '__loading__'
 const ERROR_PLACEHOLDER_ID = '__error__'

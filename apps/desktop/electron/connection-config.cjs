@@ -143,6 +143,23 @@ function normAuthMode(mode) {
 }
 
 /**
+ * Initial connection document for a product build that is backed by a known
+ * remote Hermes.  Supplying no URL preserves upstream's local-first default;
+ * the Optimus Cockpit fork supplies CT115 so a fresh user-data directory does
+ * not boot a Windows-local Hermes that cannot see BotVault or Optimus.
+ *
+ * This is only a seed for a missing/malformed connection.json.  Once the user
+ * explicitly saves Local or another remote, that persisted choice still wins.
+ */
+function defaultDesktopConnectionConfig(remoteUrl) {
+  const url = String(remoteUrl || '').trim()
+
+  return url
+    ? { mode: 'remote', remote: { url: normalizeRemoteBaseUrl(url), authMode: 'oauth' }, profiles: {} }
+    : { mode: 'local', remote: {}, profiles: {} }
+}
+
+/**
  * Select a profile's explicit remote override from a connection config, or null
  * when it has none (so the caller falls back to env → global remote → local).
  *
@@ -264,6 +281,15 @@ function cookiesHaveLiveSession(cookies) {
   return cookies.some(c => c && c.value && (AT_COOKIE_VARIANTS.includes(c.name) || RT_COOKIE_VARIANTS.includes(c.name)))
 }
 
+/** Whether a cookie belongs to the gateway session itself. Used when starting
+ * an explicit re-login so stale/revoked AT/RT cookies cannot make the login
+ * window report success before the new authentication round trip finishes. */
+function isHermesSessionCookie(cookie) {
+  return Boolean(
+    cookie && (AT_COOKIE_VARIANTS.includes(cookie.name) || RT_COOKIE_VARIANTS.includes(cookie.name))
+  )
+}
+
 module.exports = {
   AT_COOKIE_VARIANTS,
   RT_COOKIE_VARIANTS,
@@ -273,6 +299,8 @@ module.exports = {
   connectionScopeKey,
   cookiesHaveSession,
   cookiesHaveLiveSession,
+  defaultDesktopConnectionConfig,
+  isHermesSessionCookie,
   normAuthMode,
   normalizeRemoteBaseUrl,
   pathWithGlobalRemoteProfile,

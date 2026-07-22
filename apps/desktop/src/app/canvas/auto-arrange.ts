@@ -18,6 +18,8 @@ export interface CanvasViewport {
   h: number
 }
 
+export type CanvasResizeDir = 'e' | 'n' | 'ne' | 'nw' | 's' | 'se' | 'sw' | 'w'
+
 // Clearance for the titlebar band (34px) plus breathing room; the canvas is
 // calm and spacious by design, so margins err generous.
 export const CANVAS_TOP_INSET = 56
@@ -111,5 +113,34 @@ export function clampRectToViewport(rect: CanvasRect, viewport: CanvasViewport):
     ...rect,
     x: Math.min(Math.max(rect.x, minVisible - rect.w), viewport.w - minVisible),
     y: Math.min(Math.max(rect.y, CANVAS_TOP_INSET - 20), viewport.h - 48)
+  }
+}
+
+/** Resize from any edge/corner while keeping the opposite edge anchored. */
+export function resizeCanvasRect(
+  start: CanvasRect,
+  dx: number,
+  dy: number,
+  dir: CanvasResizeDir,
+  minWidth: number,
+  minHeight: number
+): CanvasRect {
+  const fromWest = dir.includes('w')
+  const fromEast = dir.includes('e')
+  const fromNorth = dir.includes('n')
+  const fromSouth = dir.includes('s')
+  const w = fromWest ? Math.max(minWidth, start.w - dx) : fromEast ? Math.max(minWidth, start.w + dx) : start.w
+
+  const h = fromNorth
+    ? Math.max(minHeight, start.h - dy)
+    : fromSouth
+      ? Math.max(minHeight, start.h + dy)
+      : start.h
+
+  return {
+    x: fromWest ? start.x + start.w - w : start.x,
+    y: fromNorth ? start.y + start.h - h : start.y,
+    w,
+    h
   }
 }

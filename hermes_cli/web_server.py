@@ -1176,6 +1176,7 @@ class ManagedFilesPolicy:
 
 
 _FS_READDIR_HIDDEN = {
+    ".trash",
     ".git",
     ".hg",
     ".svn",
@@ -1996,6 +1997,50 @@ async def fs_read_text(path: str):
 class FsWriteText(BaseModel):
     path: str
     content: str
+
+
+class FsTrashPath(BaseModel):
+    path: str
+    root: str
+
+
+@app.post("/api/fs/trash")
+async def fs_trash_path(payload: FsTrashPath):
+    """Move one regular file into a recoverable, root-local trash archive."""
+    target = _fs_path(payload.path)
+    root = _fs_path(payload.root)
+
+    if not root.is_dir():
+        raise HTTPException(status_code=400, detail="Trash root is not a directory")
+    try:
+        relative = target.relative_to(root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Path is outside the trash root")
+    if target == root:
+        raise HTTPException(status_code=400, detail="Cannot trash the root")
+
+    try:
+        st = target.stat()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Path not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Path is not accessible")
+    if not stat.S_ISREG(st.st_mode):
+        raise HTTPException(status_code=400, detail="Only regular files can be trashed")
+
+    archive_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}-{secrets.token_hex(4)}"
+    destination = root / ".trash" / archive_id / relative
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=False)
+        os.replace(target, destination)
+    except FileExistsError:
+        raise HTTPException(status_code=409, detail="Trash destination already exists")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Path cannot be trashed")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Path could not be trashed")
+
+    return {"ok": True, "path": str(target), "trashedPath": str(destination)}
 
 
 @app.post("/api/fs/write-text")

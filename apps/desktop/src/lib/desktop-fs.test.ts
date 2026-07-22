@@ -10,7 +10,8 @@ import {
   readDesktopFileDataUrl,
   readDesktopFileText,
   selectDesktopPaths,
-  setDesktopFsRemotePicker
+  setDesktopFsRemotePicker,
+  trashDesktopPath
 } from './desktop-fs'
 
 const readDir = vi.fn(async () => ({ entries: [{ name: 'local', path: '/local', isDirectory: true }] }))
@@ -38,6 +39,10 @@ const api = vi.fn(async ({ path }: { path: string }) => {
 
   if (path === '/api/fs/default-cwd') {
     return { cwd: '/backend/project', branch: 'main' }
+  }
+
+  if (path === '/api/fs/trash') {
+    return { ok: true }
   }
 
   if (path.startsWith('/api/git/file-diff?')) {
@@ -127,6 +132,19 @@ describe('desktop filesystem facade', () => {
 
     await expect(desktopFileDiff('/repo', 'src/a b.ts')).resolves.toBe('remote diff')
     expect(api).toHaveBeenCalledWith({ path: '/api/git/file-diff?path=%2Frepo&file=src%2Fa%20b.ts' })
+  })
+
+  it('routes remote trash through the recoverable backend endpoint', async () => {
+    $connection.set({ mode: 'remote' } as never)
+
+    await trashDesktopPath('/vault/note.md', '/vault')
+
+    expect(api).toHaveBeenCalledWith({
+      body: { path: '/vault/note.md', root: '/vault' },
+      method: 'POST',
+      path: '/api/fs/trash',
+      profile: undefined
+    })
   })
 
   it('uses the registered in-app directory picker in remote mode', async () => {

@@ -35,6 +35,7 @@ def test_fs_list_sorts_and_hides_noise(client, tmp_path):
     (root / "a.txt").write_text("a")
     (root / "node_modules").mkdir()
     (root / ".git").mkdir()
+    (root / ".trash").mkdir()
 
     response = client.get("/api/fs/list", params={"path": str(root)})
 
@@ -42,7 +43,34 @@ def test_fs_list_sorts_and_hides_noise(client, tmp_path):
     entries = response.json()["entries"]
     assert [entry["name"] for entry in entries] == ["a_dir", "a.txt", "b.txt"]
     assert entries[0] == {"name": "a_dir", "path": str(root / "a_dir"), "isDirectory": True}
-    assert all(entry["name"] not in {".git", "node_modules"} for entry in entries)
+    assert all(entry["name"] not in {".git", ".trash", "node_modules"} for entry in entries)
+
+
+def test_fs_trash_moves_file_to_recoverable_root_local_archive(client, tmp_path):
+    root = tmp_path / "vault"
+    note = root / "notes" / "idea.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("keep me")
+
+    response = client.post("/api/fs/trash", json={"path": str(note), "root": str(root)})
+
+    assert response.status_code == 200
+    trashed = Path(response.json()["trashedPath"])
+    assert not note.exists()
+    assert trashed.read_text() == "keep me"
+    assert trashed.relative_to(root / ".trash").parts[-2:] == ("notes", "idea.md")
+
+
+def test_fs_trash_rejects_path_outside_root(client, tmp_path):
+    root = tmp_path / "vault"
+    root.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("no")
+
+    response = client.post("/api/fs/trash", json={"path": str(outside), "root": str(root)})
+
+    assert response.status_code == 400
+    assert outside.exists()
 
 
 def test_fs_list_accepts_relative_paths(client, tmp_path, monkeypatch):
@@ -181,8 +209,10 @@ def test_fs_endpoints_require_auth(tmp_path):
 
     list_response = client.get("/api/fs/list", params={"path": str(tmp_path)})
     read_response = client.get("/api/fs/read-text", params={"path": str(target)})
+    trash_response = client.post("/api/fs/trash", json={"path": str(target), "root": str(tmp_path)})
     default_response = client.get("/api/fs/default-cwd")
 
     assert list_response.status_code == 401
     assert read_response.status_code == 401
+    assert trash_response.status_code == 401
     assert default_response.status_code == 401

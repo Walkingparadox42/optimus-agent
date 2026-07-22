@@ -14,18 +14,17 @@ The system has two layers:
 
 | Mode | Enabled service | Services disabled and stopped |
 | --- | --- | --- |
-| `voice` | CT120 `voicebox.service` | ComfyUI, Bonsai |
-| `image` | CT120 `comfyui.service` | Voicebox, Bonsai |
-| `llm` | CT102 `bonsai.service` | Voicebox, ComfyUI |
-| `idle` | none | all three |
+| `image` | CT120 `comfyui.service` | Bonsai |
+| `llm` | CT102 `bonsai.service` | ComfyUI |
+| `idle` | none | both services |
 
 Every transition is serialized with a host lock. The controller stops all GPU
 consumers, waits for VRAM release, starts the selected service, and runs a
-workload-specific readiness check. Voice readiness includes a real Chatterbox
-Turbo generation because `/health` can succeed before the model fits in VRAM.
-LLM readiness includes a short Bonsai inference rather than only checking its
-HTTP health endpoint. ComfyUI readiness uses its live system-stats API because
-image generation requires a user-selected workflow.
+workload-specific readiness check. LLM readiness includes a short Bonsai
+inference rather than only checking its HTTP health endpoint. ComfyUI
+readiness uses its live system-stats API because image generation requires a
+user-selected workflow. Voice synthesis is no longer a GPU workload: Piper
+Prime runs continuously on CT115 CPU outside this controller.
 If readiness fails, the controller returns to `idle` rather than leaving a
 partially initialized mode active.
 
@@ -36,7 +35,6 @@ from racing for the GPU after a reboot.
 
 ```text
 optimus-gpu status
-optimus-gpu voice
 optimus-gpu image
 optimus-gpu llm
 optimus-gpu idle
@@ -60,10 +58,10 @@ negative test confirmed arbitrary commands are rejected with exit 64. The
 pre-deployment host key file is backed up as
 `/root/.ssh/authorized_keys.bak-optimus-gpu-20260715`.
 
-Live acceptance covered every transition. Voicebox produced a real WAV with no
-Piper fallback, ComfyUI answered its system-stats API, Bonsai completed an
-inference, and idle released VRAM to 1 MiB. The final persistent mode is
-`voice`: Voicebox enabled, ComfyUI and Bonsai disabled.
+The original 2026-07-15 acceptance covered Voicebox, ComfyUI, Bonsai, and idle.
+Voicebox was retired on 2026-07-17 after Piper Prime became CT115's primary
+voice. Current acceptance covers ComfyUI system stats, a real Bonsai
+inference, idle VRAM release, and independent Piper voice synthesis.
 
 ## Local tests
 

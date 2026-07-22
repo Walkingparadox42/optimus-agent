@@ -11,7 +11,18 @@
 import { $voiceServerUrl, $voiceToken } from '@/app/voice/store'
 import { openBotVaultNote } from '@/store/vault-events'
 
-import { $meetingElapsed, $meetingError, $meetingLastNote, $meetingPhase } from './store'
+import {
+  $meetingElapsed,
+  $meetingError,
+  $meetingLastNote,
+  $meetingPhase,
+  type MeetingSummaryStyle
+} from './store'
+
+export interface MeetingStopContext {
+  summaryStyle: MeetingSummaryStyle
+  title: string
+}
 
 /** Finalize a successful upload and put its durable note on the shared
  * BotVault work surface. Preview navigation is best-effort: a saved meeting
@@ -55,6 +66,19 @@ function pickMimeType(): string {
   }
 
   return 'audio/webm'
+}
+
+export function meetingTranscribeRequestUrl(title: string, summaryStyle: MeetingSummaryStyle): string {
+  const url = new URL(transcribeUrl())
+  url.searchParams.set('token', $voiceToken.get().trim())
+
+  if (title) {
+    url.searchParams.set('title', title)
+  }
+
+  url.searchParams.set('summary_style', summaryStyle)
+
+  return url.toString()
 }
 
 export class MeetingRecorder {
@@ -110,7 +134,9 @@ export class MeetingRecorder {
   }
 
   /** Stop, collect meeting context, assemble the recording, upload for transcription. */
-  async stop(contextProvider?: () => Promise<null | string> | null | string): Promise<void> {
+  async stop(
+    contextProvider?: () => MeetingStopContext | null | Promise<MeetingStopContext | null>
+  ): Promise<void> {
     const recorder = this.recorder
 
     if (!recorder || recorder.state === 'inactive') {
@@ -147,27 +173,21 @@ export class MeetingRecorder {
 
     $meetingPhase.set('prompting')
 
-    let title = ''
+    let context: MeetingStopContext = { summaryStyle: 'meeting', title: '' }
 
     try {
-      title = (await contextProvider?.())?.trim() ?? ''
+      context = (await contextProvider?.()) ?? context
     } catch {
-      title = ''
+      context = { summaryStyle: 'meeting', title: '' }
     }
 
-    await this.upload(blob, title)
+    await this.upload(blob, context.title.trim(), context.summaryStyle)
   }
 
-  private async upload(blob: Blob, title: string): Promise<void> {
+  private async upload(blob: Blob, title: string, summaryStyle: MeetingSummaryStyle): Promise<void> {
     $meetingPhase.set('uploading')
 
-    const token = $voiceToken.get().trim()
-    const url = new URL(transcribeUrl())
-    url.searchParams.set('token', token)
-
-    if (title) {
-      url.searchParams.set('title', title)
-    }
+    const url = meetingTranscribeRequestUrl(title, summaryStyle)
 
     const form = new FormData()
     form.append('audio', blob, 'meeting.webm')
@@ -182,7 +202,7 @@ export class MeetingRecorder {
     }, 1_500)
 
     try {
-      const response = await fetch(url.toString(), { body: form, method: 'POST' })
+      const response = await fetch(url, { body: form, method: 'POST' })
 
       clearTimeout(flip)
 

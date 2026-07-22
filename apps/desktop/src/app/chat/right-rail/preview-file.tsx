@@ -27,7 +27,7 @@ import {
   readDesktopFileText,
   writeDesktopFileText
 } from '@/lib/desktop-fs'
-import { Check, Pencil, X } from '@/lib/icons'
+import { Check, Pencil, Trash2, X } from '@/lib/icons'
 import { shikiLanguageForFilename } from '@/lib/markdown-code'
 import { cn } from '@/lib/utils'
 import type { PreviewTarget } from '@/store/preview'
@@ -555,7 +555,13 @@ function SourceView({ filePath, language, text }: { filePath: string; language: 
 
 type PreviewViewMode = 'diff' | 'rendered' | 'source'
 
-export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; target: PreviewTarget }) {
+interface LocalFilePreviewProps {
+  reloadKey: number
+  target: PreviewTarget
+  onDelete?: (path: string) => void
+}
+
+export function LocalFilePreview({ reloadKey, target, onDelete }: LocalFilePreviewProps) {
   const { t } = useI18n()
   const [state, setState] = useState<LocalPreviewState>({ loading: true })
   const [forcePreview, setForcePreview] = useState(false)
@@ -971,16 +977,31 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
           modes={modes}
           onSelect={setUserMode}
           trailing={
-            canEdit ? (
-              <button
-                className="flex items-center gap-1 text-[0.625rem] font-bold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground"
-                onClick={beginEdit}
-                title={`${t.preview.edit} (e)`}
-                type="button"
-              >
-                <Pencil className="size-3" />
-                {t.preview.edit}
-              </button>
+            canEdit || onDelete ? (
+              <div className="flex items-center gap-2">
+                {canEdit ? (
+                  <button
+                    className="flex items-center gap-1 text-[0.625rem] font-bold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground"
+                    onClick={beginEdit}
+                    title={`${t.preview.edit} (e)`}
+                    type="button"
+                  >
+                    <Pencil className="size-3" />
+                    {t.preview.edit}
+                  </button>
+                ) : null}
+                {onDelete ? (
+                  <button
+                    className="flex items-center gap-1 text-[0.625rem] font-bold text-muted-foreground underline-offset-4 transition-colors hover:text-destructive"
+                    onClick={() => onDelete(filePath)}
+                    title={t.fileMenu.delete}
+                    type="button"
+                  >
+                    <Trash2 className="size-3" />
+                    {t.fileMenu.delete}
+                  </button>
+                ) : null}
+              </div>
             ) : null
           }
         />
