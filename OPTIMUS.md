@@ -3583,3 +3583,30 @@ Load-bearing file: `hermes_cli/config.py`; all existing config-specific
 - Python pytest was not runnable in this checkout's only available system
   interpreter because it lacks `pytest` and `PyYAML`; regression tests were
   added for unreadable existing configs and first-time config creation.
+
+### Canvas profile switcher completed
+
+The Canvas dock now includes a compact profile selector because the normal
+profile rail is hidden while Canvas mode owns the cockpit. It reads the shared
+profile atoms, keeps the default profile first, respects the user's named
+profile order, refreshes the catalog when mounted, and switches through the
+existing `selectProfile()` action. A failed background refresh is deliberately
+non-destructive so the rest of the dock stays usable.
+
+Best use: switch between Optimus and specialized Hermes profiles directly
+from the bottom Canvas dock without leaving Canvas mode or opening Settings.
+
+Load-bearing files: `apps/desktop/src/app/canvas/dock.tsx`,
+`apps/desktop/src/app/canvas/canvas.css`, and
+`apps/desktop/src/app/canvas/dock.test.tsx`.
+
+Verification: targeted Vitest and ESLint passed; the full desktop typecheck
+and production build also included these worktree changes and passed.
+
+### Voice design note retained
+
+`cicero-inspired-voice-deployment.md` is now tracked as the durable design
+record behind the voice-pattern triage above. It records the decision to adopt
+semantic endpointing, streamed acknowledgements, turn identity, speech-gated
+VAD, and latency instrumentation as patterns without deploying Cicero as a
+second orchestration platform.

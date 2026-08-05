@@ -419,6 +419,27 @@
   background: var(--canvas-accent);
 }
 
+.canvas-profile-select {
+  width: 9.5rem;
+  height: 2.125rem;
+  min-width: 0;
+  border-color: var(--canvas-dock-border);
+  background: transparent;
+  color: var(--canvas-text);
+}
+
+.canvas-profile-select:hover,
+.canvas-profile-select[data-state='open'] {
+  border-color: color-mix(in srgb, var(--canvas-accent) 55%, var(--canvas-dock-border));
+  background: color-mix(in srgb, var(--canvas-plate-edge) 16%, transparent);
+}
+
+.canvas-profile-select > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .canvas-dock-divider {
   width: 1px;
   height: 1.25rem;
