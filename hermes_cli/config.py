@@ -6434,6 +6434,42 @@ def read_raw_config() -> Dict[str, Any]:
         return data
 
 
+def require_readable_config_before_write(config_path: Optional[Path] = None) -> None:
+    """Refuse to replace an existing config file that cannot be read.
+
+    A missing file is safe: the caller is creating a new config. An existing
+    but inaccessible file is not safe because treating a read failure as an
+    empty config would silently erase settings during the subsequent write.
+    """
+    if config_path is None:
+        config_path = get_config_path()
+
+    try:
+        config_path.stat()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise RuntimeError(
+            f"Refusing to overwrite config because {config_path} cannot be accessed"
+        ) from exc
+
+    try:
+        with open(config_path, "rb") as config_file:
+            config_file.read(1)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Refusing to overwrite config because {config_path} cannot be read"
+        ) from exc
+
+
+def atomic_config_write(config_path: Path, data: Any, **kwargs: Any) -> None:
+    """Atomically write config after verifying an existing file is readable."""
+    from utils import atomic_yaml_write
+
+    require_readable_config_before_write(config_path)
+    atomic_yaml_write(config_path, data, **kwargs)
+
+
 def load_config() -> Dict[str, Any]:
     """Load configuration from ~/.hermes/config.yaml.
 
@@ -6795,8 +6831,6 @@ def save_config(
                     f"(managed by your administrator): {', '.join(sorted(_stripped))}",
                     file=sys.stderr,
                 )
-        from utils import atomic_yaml_write
-
         ensure_hermes_home()
         config_path = get_config_path()
         # Compute explicit user paths BEFORE any normalisation --------
@@ -6853,7 +6887,7 @@ def save_config(
         if not fb_is_valid:
             parts.append(_FALLBACK_COMMENT)
 
-        atomic_yaml_write(
+        atomic_config_write(
             config_path,
             normalized,
             extra_content="".join(parts) if parts else None,
@@ -7813,8 +7847,7 @@ def set_config_value(key: str, value: str):
         print("  (note: 'api_base' is an alias — saved as model.base_url)")
     # Write only user config back (not the full merged defaults)
     ensure_hermes_home()
-    from utils import atomic_yaml_write
-    atomic_yaml_write(config_path, user_config, sort_keys=False)
+    atomic_config_write(config_path, user_config, sort_keys=False)
     
     # Keep .env in sync for keys that terminal_tool reads directly from env vars.
     # config.yaml is authoritative, but terminal_tool only reads TERMINAL_ENV etc.

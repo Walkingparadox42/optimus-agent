@@ -19,6 +19,7 @@ import { $activeGatewayProfile, $profiles, normalizeProfileKey } from '@/store/p
 import { $toolViewMode, setToolViewMode } from '@/store/tool-view'
 import { $translucency, setTranslucency } from '@/store/translucency'
 import { $workspaceMode, setWorkspaceMode } from '@/store/workspace-mode'
+import { $zoomPercent, setZoomPercent } from '@/store/zoom'
 import { getBaseColors, useTheme } from '@/themes/context'
 import { installVscodeThemeFromMarketplace } from '@/themes/install'
 import type { DesktopTheme } from '@/themes/types'
@@ -63,6 +64,14 @@ function ThemePreview({ name, mode }: { name: string; mode: 'light' | 'dark' }) 
       </div>
     </div>
   )
+}
+
+const UI_SCALE_PRESETS = ['90', '100', '110', '125', '150', '175'] as const
+
+type UiScalePreset = (typeof UI_SCALE_PRESETS)[number]
+
+function matchUiScalePreset(percent: number): UiScalePreset | null {
+  return UI_SCALE_PRESETS.find(preset => Number(preset) === percent) ?? null
 }
 
 function useDebounced<T>(value: T, delayMs: number): T {
@@ -237,6 +246,7 @@ export function AppearanceSettings() {
   const embedMode = useStore($embedMode)
   const embedAllowed = useStore($embedAllowed)
   const translucency = useStore($translucency)
+  const zoomPercent = useStore($zoomPercent)
   const workspaceMode = useStore($workspaceMode)
   const canvasMode = useStore($canvasMode)
   const installs = useStore($marketplaceInstalls)
@@ -282,6 +292,9 @@ export function AppearanceSettings() {
     { id: 'off', label: a.embedsOff }
   ] as const satisfies readonly { id: EmbedMode; label: string }[]
 
+  const uiScaleOptions = UI_SCALE_PRESETS.map(preset => ({ id: preset, label: `${preset}%` }))
+  const matchedScalePreset = matchUiScalePreset(zoomPercent)
+
   return (
     <SettingsContent>
       <div>
@@ -295,6 +308,21 @@ export function AppearanceSettings() {
             action={<LanguageSwitcher />}
             description={isSavingLocale ? t.language.saving : t.language.description}
             title={t.language.label}
+          />
+
+          <ListRow
+            action={
+              <SegmentedControl
+                onChange={id => {
+                  triggerHaptic('selection')
+                  setZoomPercent(Number(id))
+                }}
+                options={uiScaleOptions}
+                value={matchedScalePreset ?? ('' as UiScalePreset)}
+              />
+            }
+            description={a.uiScaleDesc(zoomPercent)}
+            title={a.uiScaleTitle}
           />
 
           <ListRow

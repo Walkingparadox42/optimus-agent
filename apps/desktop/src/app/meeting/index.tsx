@@ -37,7 +37,11 @@ function mmss(seconds: number): string {
 export function MeetingControls() {
   const { t } = useI18n()
   const m = t.meetingPanel
-  const promptResolverRef = useRef<null | ((value: { summaryStyle: MeetingSummaryStyle; title: string }) => void)>(null)
+
+  const promptResolverRef = useRef<null | (
+    (value: { summaryStyle: MeetingSummaryStyle; title: string } | null) => void
+  )>(null)
+
   const [purpose, setPurpose] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const phase = useStore($meetingPhase)
@@ -50,7 +54,7 @@ export function MeetingControls() {
   const busy = phase === 'uploading' || phase === 'transcribing'
 
   const requestPurpose = () =>
-    new Promise<{ summaryStyle: MeetingSummaryStyle; title: string }>(resolve => {
+    new Promise<{ summaryStyle: MeetingSummaryStyle; title: string } | null>(resolve => {
       setPurpose('')
       setPromptOpen(true)
       promptResolverRef.current = resolve
@@ -61,6 +65,13 @@ export function MeetingControls() {
     promptResolverRef.current = null
     setPromptOpen(false)
     resolve?.({ summaryStyle, title: value.trim() })
+  }
+
+  const trashPromptedRecording = () => {
+    const resolve = promptResolverRef.current
+    promptResolverRef.current = null
+    setPromptOpen(false)
+    resolve?.(null)
   }
 
   const label =
@@ -90,6 +101,17 @@ export function MeetingControls() {
         <Codicon name={recording ? 'debug-stop' : 'record'} size="0.8125rem" />
         {label}
       </Button>
+      {recording && (
+        <Button
+          className="w-full"
+          onClick={() => void meetingRecorder.discard()}
+          size="sm"
+          variant="destructive"
+        >
+          <Codicon name="trash" size="0.8125rem" />
+          {m.trashRecording}
+        </Button>
+      )}
       {promptOpen && (
         <form
           className="flex w-full flex-col gap-1.5 rounded border border-(--ui-stroke-secondary) bg-(--ui-sidebar-background) p-2"
@@ -133,6 +155,10 @@ export function MeetingControls() {
               {m.skipContext}
             </Button>
           </div>
+          <Button onClick={trashPromptedRecording} size="sm" type="button" variant="destructive">
+            <Codicon name="trash" size="0.8125rem" />
+            {m.trashRecording}
+          </Button>
         </form>
       )}
       {error === 'mic-denied' ? (

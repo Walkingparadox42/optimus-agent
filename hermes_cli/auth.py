@@ -43,10 +43,10 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 
-from hermes_cli.config import get_hermes_home, get_config_path, read_raw_config
+from hermes_cli.config import atomic_config_write, get_hermes_home, get_config_path, read_raw_config
 from hermes_constants import OPENROUTER_BASE_URL, secure_parent_dir
 from agent.credential_persistence import sanitize_borrowed_credential_payload
-from utils import atomic_replace, atomic_yaml_write, env_float, is_truthy_value
+from utils import atomic_replace, env_float, is_truthy_value
 
 logger = logging.getLogger(__name__)
 
@@ -6370,7 +6370,7 @@ def _update_config_for_provider(
 
     config["model"] = model_cfg
 
-    atomic_yaml_write(config_path, config, sort_keys=False)
+    atomic_config_write(config_path, config, sort_keys=False)
     return config_path
 
 
@@ -6437,7 +6437,7 @@ def _reset_config_provider() -> Path:
         model["provider"] = "auto"
         if "base_url" in model:
             model["base_url"] = OPENROUTER_BASE_URL
-    atomic_yaml_write(config_path, config, sort_keys=False)
+    atomic_config_write(config_path, config, sort_keys=False)
     return config_path
 
 

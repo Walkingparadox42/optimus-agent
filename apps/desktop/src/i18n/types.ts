@@ -302,6 +302,8 @@ export interface Translations {
       colorModeDesc: string
       toolViewTitle: string
       toolViewDesc: string
+      uiScaleTitle: string
+      uiScaleDesc: (percent: number) => string
       workspaceModeTitle: string
       workspaceModeDesc: string
       canvasModeTitle: string
@@ -852,6 +854,7 @@ export interface Translations {
   meetingPanel: {
     record: string
     stop: string
+    trashRecording: string
     uploading: string
     transcribing: string
     prompting: string

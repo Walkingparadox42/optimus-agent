@@ -287,6 +287,9 @@ export const ja = defineLocale({
       colorModeDesc: '固定モードを選ぶか、Hermes をシステム設定に合わせます。',
       toolViewTitle: 'ツール呼び出しの表示',
       toolViewDesc: 'プロダクト表示は生のツールペイロードを隠し、テクニカル表示は入出力をすべて表示します。',
+      uiScaleTitle: 'UI スケール',
+      uiScaleDesc: (percent: number) =>
+        `コックピット全体の文字と UI を拡大縮小します。Ctrl と +、-、0 でも変更できます。現在: ${percent}%`,
       workspaceModeTitle: 'ワークスペースモード',
       workspaceModeDesc:
         'チャット、ファイルブラウザ、プレビューをコックピットのワークスペースとしてドッキングします。既定とは別に、独自のペイン配置を記憶します。',
@@ -986,6 +989,7 @@ export const ja = defineLocale({
   meetingPanel: {
     record: '会議を録音',
     stop: '停止',
+    trashRecording: 'この録音を削除',
     uploading: 'アップロード中…',
     transcribing: '文字起こし中…',
     prompting: 'Adding context...',

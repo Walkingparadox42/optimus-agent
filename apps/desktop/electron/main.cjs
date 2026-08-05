@@ -1346,6 +1346,23 @@ function unwrapWindowsVenvHermesCommand(command, backendArgs) {
   if (!fileExists(python)) return null
 
   const root = path.dirname(venvRoot)
+
+  // A mid-update venv can retain python.exe and hermes.exe while missing
+  // required packages. Probe the interpreter before returning it; failure
+  // must fall through to bootstrap/repair instead of selecting it forever.
+  if (
+    !canImportHermesCli(python, {
+      env: {
+        PYTHONPATH: [...(directoryExists(root) ? [root] : []), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
+      }
+    })
+  ) {
+    rememberLog(
+      `Ignoring venv Hermes at ${python}: runtime import probe failed (broken/partial venv); falling through to bootstrap.`
+    )
+    return null
+  }
+
   return {
     label: `existing Hermes Python at ${python}`,
     command: python,
@@ -4162,17 +4179,13 @@ function installPreviewShortcut(window) {
 // survives reloads/restarts) rather than a main-process JSON file. The main
 // process owns setZoomLevel, so we mirror each change into localStorage and
 // read it back on did-finish-load to re-apply after reloads or crash recovery.
-const ZOOM_STORAGE_KEY = 'hermes:desktop:zoomLevel'
-
-function clampZoomLevel(value) {
-  if (!Number.isFinite(value)) return 0
-  return Math.min(Math.max(value, -9), 9)
-}
+const { ZOOM_STORAGE_KEY, clampZoomLevel, percentToZoomLevel, zoomLevelToPercent } = require('./zoom.cjs')
 
 function setAndPersistZoomLevel(window, zoomLevel) {
   if (!window || window.isDestroyed()) return
   const next = clampZoomLevel(zoomLevel)
   window.webContents.setZoomLevel(next)
+  window.webContents.send('hermes:zoom:changed', { level: next, percent: zoomLevelToPercent(next) })
   window.webContents
     .executeJavaScript(
       `try { localStorage.setItem(${JSON.stringify(ZOOM_STORAGE_KEY)}, ${JSON.stringify(String(next))}) } catch {}`
@@ -6158,6 +6171,20 @@ ipcMain.handle('hermes:window:openNewSession', async () => {
   createNewSessionWindow()
 
   return { ok: true }
+})
+
+// --- UI scale (zoom) -------------------------------------------------------
+// Settings, keyboard shortcuts, and the View menu all drive this same scale.
+ipcMain.handle('hermes:zoom:get', event => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  const level = window && !window.isDestroyed() ? window.webContents.getZoomLevel() : 0
+
+  return { level, percent: zoomLevelToPercent(level) }
+})
+ipcMain.on('hermes:zoom:set-percent', (event, percent) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  if (!window || window.isDestroyed()) return
+  setAndPersistZoomLevel(window, percentToZoomLevel(Number(percent)))
 })
 
 // --- Pet overlay (pop-out mascot) -----------------------------------------

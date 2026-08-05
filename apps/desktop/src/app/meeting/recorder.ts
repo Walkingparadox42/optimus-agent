@@ -173,15 +173,57 @@ export class MeetingRecorder {
 
     $meetingPhase.set('prompting')
 
-    let context: MeetingStopContext = { summaryStyle: 'meeting', title: '' }
+    let context: MeetingStopContext | null = { summaryStyle: 'meeting', title: '' }
 
     try {
-      context = (await contextProvider?.()) ?? context
+      if (contextProvider) {
+        context = await contextProvider()
+      }
     } catch {
       context = { summaryStyle: 'meeting', title: '' }
     }
 
+    if (!context) {
+      $meetingElapsed.set(0)
+      $meetingError.set(null)
+      $meetingPhase.set('idle')
+
+      return
+    }
+
     await this.upload(blob, context.title.trim(), context.summaryStyle)
+  }
+
+  /** Stop capturing and permanently discard the in-memory recording. */
+  async discard(): Promise<void> {
+    const recorder = this.recorder
+
+    if (!recorder || recorder.state === 'inactive') {
+      return
+    }
+
+    const stopped = new Promise<void>(resolve => {
+      recorder.onstop = () => resolve()
+    })
+
+    recorder.stop()
+    await stopped
+
+    if (this.elapsedTimer) {
+      clearInterval(this.elapsedTimer)
+      this.elapsedTimer = null
+    }
+
+    for (const track of this.stream?.getTracks() ?? []) {
+      track.stop()
+    }
+
+    this.stream = null
+    this.recorder = null
+    this.chunks = []
+    $meetingElapsed.set(0)
+    $meetingError.set(null)
+    $meetingPhase.set('idle')
   }
 
   private async upload(blob: Blob, title: string, summaryStyle: MeetingSummaryStyle): Promise<void> {

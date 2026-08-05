@@ -279,6 +279,8 @@ export const zhHant = defineLocale({
       colorModeDesc: '選擇固定模式，或讓 Hermes 跟隨系統設定。',
       toolViewTitle: '工具呼叫顯示',
       toolViewDesc: '產品模式會隱藏原始工具 payload；技術模式會顯示完整輸入/輸出。',
+      uiScaleTitle: '介面縮放',
+      uiScaleDesc: (percent: number) => `縮放整個駕駛艙的文字與介面。也可使用 Ctrl 加 +、- 或 0 調整。目前：${percent}%`,
       workspaceModeTitle: '工作區模式',
       workspaceModeDesc: '將聊天、檔案瀏覽器與預覽停靠為駕駛艙工作區。會獨立於預設佈局記住自己的窗格排列。',
       canvasModeTitle: '畫布模式',
@@ -956,6 +958,7 @@ export const zhHant = defineLocale({
   meetingPanel: {
     record: '錄製會議',
     stop: '停止',
+    trashRecording: '丟棄此錄音',
     uploading: '正在上傳…',
     transcribing: '正在轉錄…',
     prompting: 'Adding context...',

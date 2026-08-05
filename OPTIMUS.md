@@ -3373,3 +3373,213 @@ stable daily launch, but packaging is deliberately deferred until the current
 production renderer's generated `__reExport$1 is not defined` runtime failure
 is fixed. The development renderer is working; shipping that known bundle
 failure inside an `.exe` would only make it harder to diagnose.
+
+---
+
+## 2026-07-24 - Wake-word retrain pass 1 (FAILED, parked) + Cicero doc triage
+
+### Cicero-inspired voice deployment doc (root, untracked, dated 2026-07-23)
+
+`cicero-inspired-voice-deployment.md` reviewed against the built system. Its
+own verdict stands: borrow interaction patterns, do NOT deploy Cicero as a
+second voice platform. Pattern-by-pattern status:
+- Instant ack + sentence-streamed TTS: already built (P1B).
+- Turn/epoch identity + barge-in: already built (ADR-0005/0006).
+- Speech-gated VAD: partial; in-window VAD is energy-only (the open FG-3 gap).
+- Semantic end-of-turn detection: NOT built. Endpointing is fixed silence
+  timers (1.2-2.0s normal modes, 8s conversation_mode). Identified as the
+  highest-leverage unbuilt change for conversational feel: projected ~7-8s
+  cut on conversation_mode turns, ~1-1.5s on quick modes, pending real
+  measurement.
+- Per-turn latency instrumentation (p50/p95): NOT built; one-off FG-1
+  forensics only. Sequencing decision: instrumentation FIRST (measurement
+  only, zero behavior change), semantic-endpointing pilot second. FG-1
+  precedent (wrong first hypothesis, real cause found only by measurement)
+  is the reason for the ordering.
+
+### Wake-word complaints (Steve): false-triggers on beeps AND misses real
+"Hey Optimus"
+
+Diagnosis: both symptoms share one root cause. hey_optimus_v0.1 was trained
+on synthetic Piper positives only (FG-4); it has never seen Steve's real
+voice (misses) or tonal/electronic sounds (beep false-accepts). The
+renderer-side gate (wake-gate.ts: 400ms sustained voiced audio + 2 hits in
+900ms) is working as designed; the beeps genuinely fool the MODEL. Threshold
+alone cannot fix it: WAKE_THRESHOLD 0.98 is already at the ceiling because
+of the same data gap. Data problem, not a knob problem.
+
+### Retrain pass 1 (real positives only) - FAILED, all four configs
+
+Steve recorded one clip containing 6 real "Hey Optimus" takes; split on
+silence gaps to 6x 16kHz mono WAVs (kept locally under .wake-samples/,
+covered by the existing *.gitignore *.wav rule). Copied into the CT115
+training pool (4 to positive_train, 2 to positive_test, steve-real-*.wav
+naming; train.py's >=95%-count skip preserves manual additions). Scratch
+model backed up first (hey_optimus_v0_1.onnx.bak-20260724-before-real-
+samples-pass1).
+
+Discovery: three UNDOCUMENTED training configs sat beside the original on
+CT115 (hey_optimus_balanced / _balanced_strict / _noise.yml, same day as
+the v0.1 model, never logged, no evidence of ever being run). They vary
+max_negative_weight / steps / target FP rate - someone previously scoped
+exactly this sensitivity fix and never finished. All four configs run with
+the real samples added (CPU-only on CT115, ~15-30s per training run, no
+RTX 3060 involvement):
+
+| config           | max_neg_weight | recall | FP/hour |
+|------------------|----------------|--------|---------|
+| base             | 500            | 0%     | 0       |
+| balanced         | 20             | 74%    | 82      |
+| balanced_strict  | 120            | 88%    | 153     |
+| noise            | 80             | 82%    | 157     |
+
+Base collapses to never-fire (deterministic: identical accuracy across two
+runs); every looser config swings to unusable false-positive rates. No
+stable middle exists at this data scale. Verdict: 6 real positives vs 300
+synthetic, with ZERO real negatives, is too thin and lopsided for
+openWakeWord's auto-escalating negative-weight procedure. NOT a
+hyperparameter problem.
+
+Cleanup: scratch onnx restored from backup, so the training dir does not
+hold a deployable-looking garbage model. The LIVE model
+(apps/desktop/public/wake/hey_optimus_v0.1.onnx) was never touched; wake
+behavior in the app is unchanged.
+
+PARKED (Steve, 2026-07-24): no more recording for now. Pass 2 requirements
+when picked up: a couple dozen real positive takes (varied distance/tone)
+AND real negative recordings of the offending beeps. The tflite conversion
+step at the end of train.py fails on a missing onnx_tf module in the venv -
+harmless (the ONNX export completes first, and only ONNX is used), but
+worth knowing it always exits nonzero.
+
+Also noted this session: uncommitted CanvasProfileSwitcher work sits in
+canvas/dock.tsx + canvas.css + a new dock.test.tsx (another session's
+in-progress work, not documented here yet); stray root file
+`how --stat a5699a9a4` is accidental git-show output, safe to delete.
+
+### Per-turn latency instrumentation DEPLOYED (2026-07-24, measurement only)
+
+The cicero doc's "measure before optimizing" step, built and live. CT115
+/opt/optimus-voice-service/voice_service.py now flushes ONE parseable
+journald line per voice turn (statuses completed/ignored/interrupted/
+failed):
+
+  TURN-TIMING turn=... run=... {"status","mode","source","wait_ms",
+  "stt_ms","submit_ms","first_delta_ms","first_audio_ms",
+  "speech_to_audio_ms","total_ms"}
+
+Legs: wait_ms = end of voiced speech -> endpoint fired (the silence-timer
+tax; THE number for the semantic-endpointing decision); stt_ms = final
+decode; submit_ms = /v1/runs POST round trip; first_delta_ms = submit ->
+first Hermes delta; first_audio_ms = first delta -> first answer audio
+byte on the wire; speech_to_audio_ms = user-felt wait (speech end ->
+answer audio starts). t0 for text turns is text.input arrival (no
+wait/stt legs). Interrupted turns flush at voice.interrupt, so barge-in
+timing is captured too. Playback start remains client-side and is NOT
+measured in this pass (first-audio-byte-sent is the server-side proxy).
+
+Zero behavior change: timestamps the service already tracked, consolidated
+at turn end. No new deps. Backup:
+voice_service.py.bak-20260724-turn-timing.
+
+Verification: local + venv py_compile clean; service restarted healthy
+(healthz P1.5+M2, piper); FULL smoke_test.py suite ALL CHECKS PASSED post-
+deploy; journal shows correct TURN-TIMING lines for all five smoke turn
+shapes (completed-audio, interrupted-during-thinking, transcript-gate
+ignored, text, interrupted-mid-turn).
+
+FIRST REAL FINDING (from the smoke run itself): the effective silence-
+endpoint tax exceeds the configured window. conversation_active nominal
+window is 1.5s; measured wait_ms was 2722 - the ~1s stt-tick cadence plus
+partial-decode time stack on top of the window before the endpoint check
+runs. The felt cost of every silence-endpointed turn is window + up to
+~1.2s of tick/decode overhead. Semantic endpointing (or just a tighter
+tick) would recover this on top of the window itself.
+
+NEXT (open): let real usage accumulate across conversation_mode and quick
+modes, then extract p50/p95 per leg from journald and decide the
+semantic-endpointing pilot with real numbers.
+
+---
+
+## 2026-08-05 - Hermes desktop backports: rich previews, UI scale, repair, config safety
+
+Four useful changes from the current upstream Hermes Windows desktop app were
+adapted into the Optimus Cockpit fork without replacing its cockpit-specific
+canvas, voice, meeting, or avatar behavior.
+
+### 1. Mermaid and SVG rendering in Markdown file previews
+
+Markdown fences in the right-rail file preview now pass through the same
+shared `RichCodeBlock` registry used by chat. Fences tagged `mermaid` or `svg`
+therefore get the existing lazy, sanitized visual renderer; every other
+language retains the Shiki syntax-highlighted fallback.
+
+Best use: ask Optimus to write workflows, architecture diagrams, timelines,
+and sequence diagrams into a Markdown file, then open that file in the
+right-rail preview. Rich-embed approval still follows the user's Appearance
+setting (`Ask`, `Always`, or `Off`).
+
+Load-bearing file:
+`apps/desktop/src/app/chat/right-rail/preview-file.tsx`.
+
+### 2. Persisted whole-cockpit UI scaling
+
+Appearance settings now expose 90%, 100%, 110%, 125%, 150%, and 175% UI-scale
+presets. Chromium zoom remains owned by Electron's main process and is
+persisted in renderer localStorage, so the selection survives reloads and app
+restarts. The settings control, View menu, and `Ctrl +/-/0` shortcuts all use
+the same clamped scale and stay synchronized.
+
+Best use: 110-125% for normal readability, 150-175% for distant displays or
+presentations, 90% for maximum information density, and `Ctrl+0` to return to
+100%.
+
+Load-bearing files: `apps/desktop/electron/zoom.cjs`,
+`apps/desktop/electron/main.cjs`, `apps/desktop/electron/preload.cjs`,
+`apps/desktop/src/store/zoom.ts`, and
+`apps/desktop/src/app/settings/appearance-settings.tsx`.
+
+### 3. Broken Windows virtual-environment detection and repair fallback
+
+The Windows backend resolver no longer trusts a surviving `python.exe` and
+`hermes.exe` pair after a partial update. Before selecting that environment it
+probes imports for `yaml`, `dotenv`, and `hermes_cli.config`, with the checkout
+root on `PYTHONPATH`. A failed probe rejects the broken environment and falls
+through to the existing bootstrap/repair flow instead of trapping the cockpit
+in repeated failed launches.
+
+Best use: automatic. If Hermes is interrupted during an update, close and
+reopen the cockpit; the normal startup repair path can now escape the partial
+environment.
+
+Load-bearing files: `apps/desktop/electron/backend-probes.cjs` and
+`apps/desktop/electron/main.cjs`.
+
+### 4. Unreadable config overwrite protection
+
+`hermes_cli.config.atomic_config_write()` is now the shared chokepoint for
+existing `config.yaml` atomic writers. It permits creation of a genuinely
+missing config, but refuses to replace an existing config that cannot be
+accessed or read. This closes the silent-settings-loss class across core
+settings, provider/auth changes, gateway slash commands, onboarding, doctor
+repairs, TUI settings, Telegram, and Yuanbao.
+
+Best use: automatic. If Hermes reports `Refusing to overwrite config`, repair
+permissions or restore `~/.hermes/config.yaml`, then retry the setting change.
+The current file is deliberately left untouched.
+
+Load-bearing file: `hermes_cli/config.py`; all existing config-specific
+`atomic_yaml_write` call sites were routed through the guarded wrapper.
+
+### Verification
+
+- Desktop TypeScript typecheck: passed.
+- Targeted Electron tests: 16 passed.
+- Rich-embed UI tests: 27 passed.
+- Targeted ESLint: passed.
+- Full desktop production build: passed.
+- Python implementation and test modules: compile checks passed.
+- Python pytest was not runnable in this checkout's only available system
+  interpreter because it lacks `pytest` and `PyYAML`; regression tests were
+  added for unreadable existing configs and first-time config creation.

@@ -370,6 +370,8 @@ export const zh: Translations = {
       colorModeDesc: '选择固定模式，或让 Hermes 跟随系统设置。',
       toolViewTitle: '工具调用显示',
       toolViewDesc: '产品模式隐藏原始工具数据；技术模式显示完整输入/输出。',
+      uiScaleTitle: '界面缩放',
+      uiScaleDesc: (percent: number) => `缩放整个驾驶舱的文字和界面。也可使用 Ctrl 加 +、- 或 0 调整。当前：${percent}%`,
       workspaceModeTitle: '工作区模式',
       workspaceModeDesc: '将聊天、文件浏览器和预览停靠为驾驶舱工作区。会独立于默认布局记住自己的窗格排列。',
       canvasModeTitle: '画布模式',
@@ -1148,6 +1150,7 @@ export const zh: Translations = {
   meetingPanel: {
     record: '录制会议',
     stop: '停止',
+    trashRecording: '丢弃此录音',
     uploading: '正在上传…',
     transcribing: '正在转录…',
     prompting: 'Adding context...',

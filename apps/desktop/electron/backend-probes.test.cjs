@@ -43,6 +43,7 @@ test('canImportHermesCli returns false when binary does not exist', () => {
 test('hermes runtime import probe checks config dependencies', () => {
   const probe = hermesRuntimeImportProbe()
   assert.match(probe, /\bimport yaml\b/)
+  assert.match(probe, /\bimport dotenv\b/)
   assert.match(probe, /\bimport hermes_cli\.config\b/)
 })
 

@@ -381,6 +381,9 @@ export const en: Translations = {
       colorModeDesc: 'Pick a fixed mode or let Hermes follow your system setting.',
       toolViewTitle: 'Tool Call Display',
       toolViewDesc: 'Product hides raw tool payloads; Technical shows full input/output.',
+      uiScaleTitle: 'UI Scale',
+      uiScaleDesc: (percent: number) =>
+        `Scales text and controls across the whole cockpit. Ctrl with +, - and 0 also works. Current: ${percent}%.`,
       workspaceModeTitle: 'Workspace Mode',
       workspaceModeDesc:
         'Dock chat, file browser, and preview as a cockpit workspace. Remembers its own pane layout, separate from the default.',
@@ -968,6 +971,7 @@ export const en: Translations = {
   meetingPanel: {
     record: 'Record meeting',
     stop: 'Stop',
+    trashRecording: 'Trash this recording',
     uploading: 'Uploading…',
     transcribing: 'Transcribing…',
     prompting: 'Adding context…',

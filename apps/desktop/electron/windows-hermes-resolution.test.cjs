@@ -14,6 +14,8 @@
 //      shim, written at the END of venv setup and absent in interrupted
 //      states), so it escalated to a full venv recreate even on healthy
 //      installs.
+//   3. unwrapWindowsVenvHermesCommand() trusted an interpreter from a partial
+//      update without proving its runtime imports still worked.
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
@@ -55,5 +57,20 @@ test('Windows bootstrap recovery chooses --update when any real-install signal i
     source,
     /updaterArgs = fileExists\(venvHermes\) \?/,
     'recovery regressed to gating only on the hermes.exe shim, which forces destructive --repair'
+  )
+})
+
+test('unwrapWindowsVenvHermesCommand smoke-tests the venv python before trusting it', () => {
+  const source = readMain()
+  const fnStart = source.indexOf('function unwrapWindowsVenvHermesCommand(')
+  assert.notEqual(fnStart, -1, 'unwrapWindowsVenvHermesCommand must exist in main.cjs')
+  const fnEnd = source.indexOf('\nfunction ', fnStart + 1)
+  const body = source.slice(fnStart, fnEnd === -1 ? undefined : fnEnd)
+
+  assert.match(body, /canImportHermesCli\(python/, 'the venv interpreter must pass the runtime import probe')
+  assert.match(
+    body,
+    /return null\s*\n\s*\}\s*\n\s*return \{/,
+    'a failed probe must fall through so bootstrap repair can run'
   )
 })

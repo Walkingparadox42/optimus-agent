@@ -6,8 +6,8 @@ const { openBotVaultNote } = vi.hoisted(() => ({ openBotVaultNote: vi.fn() }))
 
 vi.mock('@/store/vault-events', () => ({ openBotVaultNote }))
 
-import { completeMeetingNote, meetingTranscribeRequestUrl } from './recorder'
-import { $meetingLastNote, $meetingPhase } from './store'
+import { completeMeetingNote, MeetingRecorder, meetingTranscribeRequestUrl } from './recorder'
+import { $meetingElapsed, $meetingLastNote, $meetingPhase } from './store'
 
 describe('meeting recorder completion', () => {
   beforeEach(() => {
@@ -47,6 +47,82 @@ describe('meeting recorder completion', () => {
     await completeMeetingNote(notePath)
 
     expect($meetingLastNote.get()).toBe(notePath)
+    expect($meetingPhase.get()).toBe('idle')
+  })
+
+  it('discards captured audio without uploading it for transcription', async () => {
+    const track = { stop: vi.fn() }
+    const stream = { getTracks: () => [track] }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    class FakeMediaRecorder {
+      static isTypeSupported = () => true
+      mimeType = 'audio/webm;codecs=opus'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      state: RecordingState = 'inactive'
+
+      start() {
+        this.state = 'recording'
+      }
+
+      stop() {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['captured audio']) })
+        this.onstop?.()
+      }
+    }
+
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder)
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream as unknown as MediaStream) }
+    })
+
+    const recorder = new MeetingRecorder()
+    await recorder.start()
+    $meetingElapsed.set(12)
+    await recorder.discard()
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(track.stop).toHaveBeenCalledOnce()
+    expect($meetingElapsed.get()).toBe(0)
+    expect($meetingPhase.get()).toBe('idle')
+  })
+
+  it('discards stopped audio when the context prompt is cancelled', async () => {
+    const track = { stop: vi.fn() }
+    const stream = { getTracks: () => [track] }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    class FakeMediaRecorder {
+      static isTypeSupported = () => true
+      mimeType = 'audio/webm;codecs=opus'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      state: RecordingState = 'inactive'
+
+      start() {
+        this.state = 'recording'
+      }
+
+      stop() {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['captured audio']) })
+        this.onstop?.()
+      }
+    }
+
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder)
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream as unknown as MediaStream) }
+    })
+
+    const recorder = new MeetingRecorder()
+    await recorder.start()
+    await recorder.stop(() => null)
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(track.stop).toHaveBeenCalledOnce()
     expect($meetingPhase.get()).toBe('idle')
   })
 })
